@@ -1,0 +1,8 @@
+{
+  "name": "Remix Canlı Atlası",
+  "description": "Kaybolan Canlıların İzinde – Biyoçeşitliliğin Dijital Hafızası. Açık GBIF verileriyle tür analizi, yıllık ve bölgesel gözlem dağılımı, etkileşimli harita ve tür karşılaştırma platformu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SpeciesAnalysis } from '../types/biodiversity';
+import { SpeciesAnalysis, ResearchParameters } from '../types/biodiversity';
 import { 
   Bot, 
   Sparkles, 
@@ -17,7 +17,11 @@ import {
   Loader2,
   FileText,
   Compass,
-  ArrowRight
+  ArrowRight,
+  HelpCircle,
+  Calendar,
+  Filter,
+  Check
 } from 'lucide-react';
 
 interface AgentExecutionStep {
@@ -30,10 +34,14 @@ interface AgentExecutionStep {
 
 interface AgentResearchResponse {
   success: boolean;
-  report: string;
+  requiresClarification?: boolean;
+  isZeroRecords?: boolean;
+  report?: string;
+  error?: string;
   steps: AgentExecutionStep[];
   analysis: SpeciesAnalysis | null;
-  speciesName: string;
+  speciesName: string | null;
+  parameters?: ResearchParameters | null;
   agentMode: string;
 }
 
@@ -44,25 +52,35 @@ interface ResearchAgentProps {
 
 const PRESET_QUERIES = [
   {
-    label: 'Bozayı Trendleri',
-    query: "Türkiye'de Bozayı (Ursus arctos) gözlem kayıtlarını ve en yoğun görüldüğü illeri araştır",
+    label: 'Test 1: Bozayı 10 Yıllık GBIF Analizi',
+    query: "Türkiye'deki boz ayıların son 10 yıllık GBIF gözlem kayıtlarını araştır. En fazla kayıt bulunan illeri belirle ve yıllara göre değişimi açıkla.",
   },
   {
-    label: 'Akdeniz Foku Dağılımı',
+    label: 'Test 2: Vaşak Yıllık Dağılımı',
+    query: "Türkiye'de vaşak gözlemlerinin yıllara göre dağılımını incele.",
+  },
+  {
+    label: 'Test 3: Caretta caretta Dağılımı',
+    query: "Türkiye'deki Caretta caretta gözlem kayıtlarını ve coğrafi dağılımını araştır.",
+  },
+  {
+    label: 'Test 4: Son 10 Yılda Bozayı Yoğunluğu',
+    query: "Son 10 yılda Türkiye'de en fazla gözlemlenen bozayı kayıtlarının hangi bölgelerde olduğunu bul.",
+  },
+  {
+    label: 'Akdeniz Foku Kıyı Kayıtları',
     query: "Kritik tehlikedeki Akdeniz Foku (Monachus monachus) için kıyı gözlem kayıtlarını ve koruma durumunu analiz et",
   },
-  {
-    label: 'Endemik Toros Kurbağası',
-    query: "Toros Kurbağası (Rana holtzi) kayıtlarını çıkar ve kritik tehdit analizini yap",
-  },
-  {
-    label: 'Vaşak Kayıtları',
-    query: "Bayağı Vaşak (Lynx lynx) gözlem kayıtlarının il bazlı dağılımı ve zirve yıllarını belirle",
-  },
-  {
-    label: 'Bozkurt Dağılımı',
-    query: "Bozkurt (Canis lupus) popülasyon gözlem eğilimi ve GPS koordinatlı kayıt oranını incele",
-  },
+];
+
+const QUICK_SPECIES_OPTIONS = [
+  { name: 'Bozayı', sci: 'Ursus arctos' },
+  { name: 'Bayağı Vaşak', sci: 'Lynx lynx' },
+  { name: 'Bozkurt', sci: 'Canis lupus' },
+  { name: 'Caretta caretta', sci: 'Caretta caretta' },
+  { name: 'Akdeniz Foku', sci: 'Monachus monachus' },
+  { name: 'Toros Kurbağası', sci: 'Rana holtzi' },
+  { name: 'Kelaynak', sci: 'Geronticus eremita' },
 ];
 
 export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtlas, activeSpeciesName }) => {
@@ -105,6 +123,31 @@ export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtl
     }
   };
 
+  const getEngineBadge = (mode: string) => {
+    switch (mode) {
+      case 'gemini_function_calling':
+        return {
+          label: 'Gemini 2.5 Flash (Yapay Zekâ Ajanı - Function Calling)',
+          color: 'text-emerald-300 border-emerald-500/40 bg-emerald-950/60',
+        };
+      case 'deterministic_gbif':
+        return {
+          label: 'GBIF Bilimsel Analitik Motoru (Doğrudan Çözümleyici)',
+          color: 'text-teal-300 border-teal-500/40 bg-teal-950/60',
+        };
+      case 'gbif_verified':
+        return {
+          label: 'GBIF Açık Bilim Doğrulanmış Kayıt Motoru',
+          color: 'text-amber-300 border-amber-500/40 bg-amber-950/60',
+        };
+      default:
+        return {
+          label: 'Canlı Atlası Analiz Motoru',
+          color: 'text-emerald-300 border-emerald-500/40 bg-emerald-950/60',
+        };
+    }
+  };
+
   return (
     <section id="ajan" className="bg-[#111e17] border border-emerald-800/60 rounded-3xl p-6 sm:p-8 lg:p-10 shadow-2xl relative overflow-hidden">
       
@@ -129,7 +172,7 @@ export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtl
               </span>
             </div>
             <p className="text-xs sm:text-sm text-emerald-200/70 max-w-2xl">
-              Yapay zekâ destekli otonom araştırma asistanı; doğal dildeki araştırma talebinizi anlar, GBIF açık bilim veri tabanından gerçek gözlem kayıtlarını çeker, zamansal ve coğrafi dağılımı analiz edip bilimsel sentez raporu üretir.
+              Doğal dildeki araştırma talebinizi ayrıştırır; canlı türünü, hedef bölgeyi ve tarih aralığını tespit ederek GBIF açık bilim veritabanından doğrulanmış gözlem kayıtlarını çeker ve akademik sentez raporu üretir.
             </p>
           </div>
         </div>
@@ -167,7 +210,7 @@ export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtl
       </div>
 
       {/* Agent Search Console */}
-      <div className="mt-2 mb-8">
+      <div className="mt-2 mb-6">
         <div className="relative rounded-2xl bg-[#0b1510] border border-emerald-700/50 p-2 flex flex-col sm:flex-row items-stretch gap-2 shadow-inner focus-within:border-emerald-400 transition-colors">
           <textarea
             value={prompt}
@@ -178,7 +221,7 @@ export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtl
                 handleExecuteResearch();
               }
             }}
-            placeholder="Ajan için araştırma görevi yazın... (Örn: Türkiye'de son 20 yılda Bozayı gözlem kayıtlarını ve en çok görüldüğü illeri analiz et)"
+            placeholder="Ajan için araştırma görevi yazın... (Örn: Türkiye'deki boz ayıların son 10 yıllık GBIF gözlem kayıtlarını araştır. En fazla kayıt bulunan illeri belirle ve yıllara göre değişimi açıkla.)"
             rows={2}
             className="flex-1 bg-transparent px-3 py-2 text-xs sm:text-sm text-white focus:outline-none placeholder-emerald-400/40 resize-none font-sans"
           />
@@ -213,6 +256,38 @@ export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtl
         </div>
       )}
 
+      {/* Clarification Alert (When species is not identified) */}
+      {!isLoading && result && result.requiresClarification && (
+        <div className="mb-6 p-6 rounded-2xl bg-amber-950/40 border border-amber-600/50 space-y-4">
+          <div className="flex items-start gap-3">
+            <HelpCircle className="w-6 h-6 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-bold text-amber-200 mb-1">Araştırılacak Canlı Türü Tespit Edilemedi</h4>
+              <p className="text-xs text-amber-300/80 leading-relaxed">
+                {result.error || 'Yazdığınız cümlede doğrulanmış bir canlı türü tespit edilemedi. Lütfen incelemek istediğiniz türü belirterek yeniden deneyin.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-amber-800/40">
+            <p className="text-xs font-semibold text-amber-300 mb-2">Hızlıca araştırabileceğiniz yaygın türler:</p>
+            <div className="flex flex-wrap gap-2">
+              {QUICK_SPECIES_OPTIONS.map((spec) => (
+                <button
+                  key={spec.sci}
+                  onClick={() => handleExecuteResearch(`Türkiye'deki ${spec.name} (${spec.sci}) gözlem kayıtlarını ve bölgesel dağılımını araştır.`)}
+                  className="px-3 py-1.5 rounded-xl bg-[#0b1510] hover:bg-amber-900/40 border border-amber-700/40 text-amber-200 text-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span>{spec.name}</span>
+                  <span className="italic text-[10px] text-amber-400/70">({spec.sci})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Loading Animation HUD */}
       {isLoading && (
         <div className="py-12 px-6 rounded-2xl bg-[#0b1510]/60 border border-emerald-900/60 flex flex-col items-center justify-center text-center space-y-4 my-6">
@@ -223,23 +298,30 @@ export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtl
           <div>
             <h4 className="text-base font-bold text-white mb-1">Ajan Araştırmayı Yürütüyor</h4>
             <p className="text-xs text-emerald-300/70 max-w-md">
-              Kullanıcı görevi çözümleniyor, GBIF API'sinden canlı bilimsel veriler ve koordinatlar çekiliyor...
+              Doğal dil sorgusu ayrıştırılıyor, GBIF API'sinden canlı bilimsel veriler ve koordinatlar çekiliyor...
             </p>
           </div>
         </div>
       )}
 
       {/* Results View */}
-      {!isLoading && result && (
+      {!isLoading && result && !result.requiresClarification && (
         <div className="space-y-6 pt-2">
           
           {/* Agent Workflow Execution Audit Trail */}
           {result.steps && result.steps.length > 0 && (
             <div className="bg-[#0b1510]/70 border border-emerald-900/60 rounded-2xl p-5">
-              <h3 className="text-xs font-mono uppercase tracking-wider text-emerald-400 font-bold mb-3 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Ajan Çalışma Akışı & Doğrulama Adımları ({result.steps.length} Adım)</span>
-              </h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                <h3 className="text-xs font-mono uppercase tracking-wider text-emerald-400 font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>Ajan Çalışma Akışı & Doğrulama Adımları ({result.steps.length} Adım)</span>
+                </h3>
+                
+                {/* Engine attribution badge */}
+                <span className={`text-[11px] font-mono px-3 py-1 rounded-full border font-semibold ${getEngineBadge(result.agentMode).color}`}>
+                  {getEngineBadge(result.agentMode).label}
+                </span>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 {result.steps.map((step, idx) => (
@@ -254,6 +336,66 @@ export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtl
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Extracted Research Parameters HUD Card */}
+          {result.parameters && (
+            <div className="bg-[#0b1510] border border-emerald-800/50 rounded-2xl p-5 shadow-lg">
+              <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-emerald-400 font-bold mb-3">
+                <Filter className="w-4 h-4 text-emerald-400" />
+                <span>Ayrıştırılan Araştırma Parametreleri</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="p-3 rounded-xl bg-[#111e17] border border-emerald-900/60">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/70 block mb-0.5">
+                    Hedef Canlı Türü
+                  </span>
+                  <p className="text-xs font-bold text-white truncate">
+                    {result.parameters.speciesName}
+                  </p>
+                  <span className="text-[10px] italic font-serif text-emerald-300/70 block">
+                    {result.parameters.scientificName}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[#111e17] border border-emerald-900/60">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/70 block mb-0.5">
+                    Hedef Coğrafya
+                  </span>
+                  <p className="text-xs font-bold text-white">
+                    {result.parameters.country}
+                  </p>
+                  <span className="text-[10px] font-mono text-emerald-300/70 block">
+                    ISO Kodu: {result.parameters.countryCode || 'Global (Tüm Dünya)'}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[#111e17] border border-emerald-900/60">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/70 block mb-0.5">
+                    Tarih Aralığı
+                  </span>
+                  <p className="text-xs font-bold text-emerald-300 truncate">
+                    {result.parameters.dateRangeText}
+                  </p>
+                  <span className="text-[10px] text-emerald-400/60 block">
+                    GBIF Yıl Filtresi
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[#111e17] border border-emerald-900/60">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/70 block mb-0.5">
+                    İstenen Analiz Kapsamı
+                  </span>
+                  <p className="text-xs font-bold text-white truncate">
+                    {result.parameters.analysisType}
+                  </p>
+                  <span className="text-[10px] text-emerald-300/70 block truncate">
+                    {result.parameters.geographicScope}
+                  </span>
+                </div>
               </div>
             </div>
           )}
@@ -281,7 +423,7 @@ export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtl
                   {result.analysis.totalRecords.toLocaleString('tr-TR')}
                 </p>
                 <span className="text-[10px] text-emerald-300/70 block mt-0.5">
-                  {result.analysis.countryName} arşivi
+                  {result.analysis.countryName} ({result.analysis.mappedRecordsCount} koordinatlı)
                 </span>
               </div>
 
@@ -311,6 +453,16 @@ export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtl
             </div>
           )}
 
+          {/* Zero Records Warning Notification */}
+          {result.isZeroRecords && (
+            <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-600/50 flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+              <p className="text-xs text-amber-200">
+                Belirtilen tarih veya coğrafya kriterlerinde GBIF açık bilim arşivinde kayıt bulunamadı. Lütfen sağ üstteki coğrafya filtresini <strong>"Tüm Dünya (Global)"</strong> yaparak veya tarih kısıtını kaldırarak tekrar deneyin.
+              </p>
+            </div>
+          )}
+
           {/* Synthesis Report Content */}
           <div className="p-6 rounded-2xl bg-[#0b1510] border border-emerald-800/40 shadow-xl space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-emerald-900/50">
@@ -320,7 +472,7 @@ export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtl
               </div>
 
               {/* Synchronize button: Loads species into main map & overview */}
-              {result.analysis && (
+              {result.analysis && result.analysis.totalRecords > 0 && (
                 <button
                   onClick={() => {
                     onLoadSpeciesToAtlas(result.analysis!.species.scientificName, selectedCountry);
@@ -348,8 +500,8 @@ export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtl
                 <span>•</span>
                 <span>Taksonomi: iNaturalist & Catalogue of Life</span>
               </div>
-              <div className="text-emerald-300/80">
-                Ajan Modu: {result.agentMode === 'gemini_function_calling' ? 'Gemini 3.8 Flash (Tool Calling)' : 'GBIF Analitik Sentez'}
+              <div className="text-emerald-300/90 font-semibold">
+                Çalışan Motor: {getEngineBadge(result.agentMode).label}
               </div>
             </div>
           </div>
@@ -360,3 +512,4 @@ export const ResearchAgent: React.FC<ResearchAgentProps> = ({ onLoadSpeciesToAtl
     </section>
   );
 };
+

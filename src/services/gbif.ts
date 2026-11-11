@@ -3,7 +3,16 @@
  * Gerçek açık veri kaynakları üzerinden biyoçeşitlilik gözlem ve tür bilgisi çekme modülü.
  */
 
-import { DiscoverySpecimen, GBIFOccurrence, RegionStat, SpeciesAnalysis, SpeciesInfo, YearlyStat } from '../types/biodiversity';
+import { 
+  DiscoverySpecimen, 
+  GBIFOccurrence, 
+  RegionStat, 
+  SpeciesAnalysis, 
+  SpeciesInfo, 
+  YearlyStat,
+  ResearchParameters,
+  FetchSpeciesOptions 
+} from '../types/biodiversity';
 
 // Yaygın Türkçe canlı isimleri ve bilimsel ad eşleşmeleri
 export const COMMON_TURKISH_SPECIES: Record<string, { scientificName: string; turkishName: string; iucn: string; category: string }> = {
@@ -11,12 +20,16 @@ export const COMMON_TURKISH_SPECIES: Record<string, { scientificName: string; tu
   'boz ayı': { scientificName: 'Ursus arctos', turkishName: 'Bozayı', iucn: 'LC', category: 'Memeliler' },
   'ayı': { scientificName: 'Ursus arctos', turkishName: 'Bozayı', iucn: 'LC', category: 'Memeliler' },
   'vaşak': { scientificName: 'Lynx lynx', turkishName: 'Bayağı Vaşak', iucn: 'LC', category: 'Memeliler' },
+  'bayağı vaşak': { scientificName: 'Lynx lynx', turkishName: 'Bayağı Vaşak', iucn: 'LC', category: 'Memeliler' },
   'kurt': { scientificName: 'Canis lupus', turkishName: 'Bozkurt', iucn: 'LC', category: 'Memeliler' },
   'bozkurt': { scientificName: 'Canis lupus', turkishName: 'Bozkurt', iucn: 'LC', category: 'Memeliler' },
   'yaban kedisi': { scientificName: 'Felis silvestris', turkishName: 'Yaban Kedisi', iucn: 'LC', category: 'Memeliler' },
   'akdeniz foku': { scientificName: 'Monachus monachus', turkishName: 'Akdeniz Foku', iucn: 'EN', category: 'Deniz Canlıları' },
+  'deniz foku': { scientificName: 'Monachus monachus', turkishName: 'Akdeniz Foku', iucn: 'EN', category: 'Deniz Canlıları' },
   'çizgili sırtlan': { scientificName: 'Hyaena hyaena', turkishName: 'Çizgili Sırtlan', iucn: 'NT', category: 'Memeliler' },
+  'sırtlan': { scientificName: 'Hyaena hyaena', turkishName: 'Çizgili Sırtlan', iucn: 'NT', category: 'Memeliler' },
   'caretta caretta': { scientificName: 'Caretta caretta', turkishName: 'İribaş Deniz Kaplumbağası', iucn: 'VU', category: 'Sürüngenler' },
+  'caretta': { scientificName: 'Caretta caretta', turkishName: 'İribaş Deniz Kaplumbağası', iucn: 'VU', category: 'Sürüngenler' },
   'deniz kaplumbağası': { scientificName: 'Caretta caretta', turkishName: 'İribaş Deniz Kaplumbağası', iucn: 'VU', category: 'Sürüngenler' },
   'yeşil deniz kaplumbağası': { scientificName: 'Chelonia mydas', turkishName: 'Yeşil Deniz Kaplumbağası', iucn: 'EN', category: 'Sürüngenler' },
   'kelaynak': { scientificName: 'Geronticus eremita', turkishName: 'Kelaynak', iucn: 'EN', category: 'Kuşlar' },
@@ -28,10 +41,373 @@ export const COMMON_TURKISH_SPECIES: Record<string, { scientificName: string; tu
   'toros kurbağası': { scientificName: 'Rana holtzi', turkishName: 'Toros Kurbağası', iucn: 'CR', category: 'Amfibiler' },
   'kafkas semenderi': { scientificName: 'Mertensiella caucasica', turkishName: 'Kafkas Semenderi', iucn: 'VU', category: 'Amfibiler' },
   'şişeburunlu yunus': { scientificName: 'Tursiops truncatus', turkishName: 'Afalina (Şişeburunlu Yunus)', iucn: 'LC', category: 'Deniz Canlıları' },
+  'afalina': { scientificName: 'Tursiops truncatus', turkishName: 'Afalina (Şişeburunlu Yunus)', iucn: 'LC', category: 'Deniz Canlıları' },
   'aslan': { scientificName: 'Panthera leo', turkishName: 'Aslan', iucn: 'VU', category: 'Memeliler' },
   'leopar': { scientificName: 'Panthera pardus', turkishName: 'Anadolu Leoparı', iucn: 'VU', category: 'Memeliler' },
+  'anadolu leoparı': { scientificName: 'Panthera pardus', turkishName: 'Anadolu Leoparı', iucn: 'VU', category: 'Memeliler' },
+  'anadolu parsı': { scientificName: 'Panthera pardus', turkishName: 'Anadolu Leoparı', iucn: 'VU', category: 'Memeliler' },
   'kaplan': { scientificName: 'Panthera tigris', turkishName: 'Kaplan', iucn: 'EN', category: 'Memeliler' }
 };
+
+export interface SpeciesRule {
+  scientificName: string;
+  turkishName: string;
+  family: string;
+  patterns: RegExp[];
+}
+
+export const SPECIES_RECOGNITION_RULES: SpeciesRule[] = [
+  // 1. Bozayı (Ursus arctos) - "boz ayıların", "bozayılar", "ursus arctos"
+  {
+    scientificName: 'Ursus arctos',
+    turkishName: 'Bozayı',
+    family: 'Ursidae',
+    patterns: [
+      /\b(boz\s*ay[ıi]|ursus\s+arctos)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 2. Vaşak (Lynx lynx) - "vaşak", "vaşaklar", "vaşakların", "vaşağın"
+  {
+    scientificName: 'Lynx lynx',
+    turkishName: 'Bayağı Vaşak',
+    family: 'Felidae',
+    patterns: [
+      /\b(baya[gğ]ı\s+va[sş]ak|lynx\s+lynx)\b/iu,
+      /\bva[sş]a[kğ](?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 3. Bozkurt / Kurt (Canis lupus) - "bozkurt", "kurt", "kurtların", "kurdun"
+  {
+    scientificName: 'Canis lupus',
+    turkishName: 'Bozkurt',
+    family: 'Canidae',
+    patterns: [
+      /\b(bozkurt|canis\s+lupus)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+      /\b(kurt|kurd)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 4. Caretta caretta - "caretta caretta", "carettaların", "deniz kaplumbağası"
+  {
+    scientificName: 'Caretta caretta',
+    turkishName: 'İribaş Deniz Kaplumbağası',
+    family: 'Cheloniidae',
+    patterns: [
+      /\b(caretta(?:\s+caretta)?)\b/iu,
+      /\bdeniz\s+kaplumba[gğ]as[ıi](?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 5. Akdeniz Foku (Monachus monachus) - "akdeniz foku", "akdeniz foklarının"
+  {
+    scientificName: 'Monachus monachus',
+    turkishName: 'Akdeniz Foku',
+    family: 'Phocidae',
+    patterns: [
+      /\b(akdeniz\s+foku|monachus\s+monachus|deniz\s+foku)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+      /\bfok(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 6. Toros Kurbağası (Rana holtzi)
+  {
+    scientificName: 'Rana holtzi',
+    turkishName: 'Toros Kurbağası',
+    family: 'Ranidae',
+    patterns: [
+      /\b(toros\s+kurba[gğ]as[ıi]|rana\s+holtzi)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 7. Kelaynak (Geronticus eremita)
+  {
+    scientificName: 'Geronticus eremita',
+    turkishName: 'Kelaynak',
+    family: 'Threskiornithidae',
+    patterns: [
+      /\b(kelayna[kğ]|geronticus\s+eremita)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 8. Çizgili Sırtlan (Hyaena hyaena)
+  {
+    scientificName: 'Hyaena hyaena',
+    turkishName: 'Çizgili Sırtlan',
+    family: 'Hyaenidae',
+    patterns: [
+      /\b([cç]izgili\s+s[ıi]rtlan|hyaena\s+hyaena)\b/iu,
+      /\bs[ıi]rtlan(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 9. Yaban Kedisi (Felis silvestris)
+  {
+    scientificName: 'Felis silvestris',
+    turkishName: 'Yaban Kedisi',
+    family: 'Felidae',
+    patterns: [
+      /\b(yaban\s+kedisi|felis\s+silvestris)(?:ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 10. Anadolu Leoparı / Pars (Panthera pardus)
+  {
+    scientificName: 'Panthera pardus',
+    turkishName: 'Anadolu Leoparı',
+    family: 'Felidae',
+    patterns: [
+      /\b(anadolu\s+leopar[ıi]|anadolu\s+pars[ıi]|panthera\s+pardus)\b/iu,
+      /\b(leopar|pars)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 11. Kafkas Semenderi (Mertensiella caucasica)
+  {
+    scientificName: 'Mertensiella caucasica',
+    turkishName: 'Kafkas Semenderi',
+    family: 'Salamandridae',
+    patterns: [
+      /\b(kafkas\s+semenderi|mertensiella\s+caucasica)(?:ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 12. Kaya Kartalı (Aquila chrysaetos)
+  {
+    scientificName: 'Aquila chrysaetos',
+    turkishName: 'Kaya Kartalı',
+    family: 'Accipitridae',
+    patterns: [
+      /\b(kaya\s+kartal[ıi]|aquila\s+chrysaetos)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 13. Şah Kartal (Aquila heliaca)
+  {
+    scientificName: 'Aquila heliaca',
+    turkishName: 'Şah Kartal',
+    family: 'Accipitridae',
+    patterns: [
+      /\b([sş]ah\s+kartal[ıi]?|aquila\s+heliaca)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 14. Toy Kuşu (Otis tarda)
+  {
+    scientificName: 'Otis tarda',
+    turkishName: 'Toy Kuşu',
+    family: 'Otididae',
+    patterns: [
+      /\b(toy(\s+ku[sş]u)?|otis\s+tarda)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 15. Yeşil Deniz Kaplumbağası (Chelonia mydas)
+  {
+    scientificName: 'Chelonia mydas',
+    turkishName: 'Yeşil Deniz Kaplumbağası',
+    family: 'Cheloniidae',
+    patterns: [
+      /\b(ye[sş]il\s+deniz\s+kaplumba[gğ]as[ıi]|chelonia\s+mydas)\b/iu,
+    ],
+  },
+  // 16. Kafkas Engereği (Vipera kaznakovi)
+  {
+    scientificName: 'Vipera kaznakovi',
+    turkishName: 'Kafkas Burunlu Engereği',
+    family: 'Viperidae',
+    patterns: [
+      /\b(kafkas\s+engere[gğ]i|vipera\s+kaznakovi)(?:ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 17. Afalina / Yunus (Tursiops truncatus)
+  {
+    scientificName: 'Tursiops truncatus',
+    turkishName: 'Afalina (Şişeburunlu Yunus)',
+    family: 'Delphinidae',
+    patterns: [
+      /\b([sş]i[sş]eburunlu\s+yunus|tursiops\s+truncatus|afalina)\b/iu,
+      /\byunus(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 18. Aslan (Panthera leo)
+  {
+    scientificName: 'Panthera leo',
+    turkishName: 'Aslan',
+    family: 'Felidae',
+    patterns: [
+      /\b(aslan|panthera\s+leo)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 19. Kaplan (Panthera tigris)
+  {
+    scientificName: 'Panthera tigris',
+    turkishName: 'Kaplan',
+    family: 'Felidae',
+    patterns: [
+      /\b(kaplan|panthera\s+tigris)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+    ],
+  },
+  // 20. Genel Ayı (Ursus arctos) - checked last if not matched as boz ayı
+  {
+    scientificName: 'Ursus arctos',
+    turkishName: 'Bozayı',
+    family: 'Ursidae',
+    patterns: [
+      /(?:^|[^\p{L}])(ay[ıi])(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?(?=[^\p{L}]|$)/iu,
+    ],
+  },
+];
+
+/**
+ * Doğal dildeki kullanıcı araştırma talebini parametrelere ayırma fonksiyonu
+ */
+export function extractSpeciesAndParameters(
+  rawQuery: string,
+  defaultCountry: string = 'TR'
+): {
+  foundSpecies: boolean;
+  parameters?: ResearchParameters;
+  resolvedScientificName?: string;
+  error?: string;
+} {
+  const text = (rawQuery || '').trim();
+  if (!text) {
+    return {
+      foundSpecies: false,
+      error: 'Lütfen bir araştırma görevi veya soru girin.',
+    };
+  }
+
+  // Normalize Turkish characters and punctuation
+  const normalized = text
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035']/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036"]/g, '"');
+
+  // 1. Match against biological rules
+  let matchedRule: SpeciesRule | null = null;
+  for (const rule of SPECIES_RECOGNITION_RULES) {
+    for (const pattern of rule.patterns) {
+      if (pattern.test(normalized)) {
+        matchedRule = rule;
+        break;
+      }
+    }
+    if (matchedRule) break;
+  }
+
+  let scientificName = matchedRule?.scientificName;
+  let turkishName = matchedRule?.turkishName;
+
+  // 2. Check for Latin binomial names (e.g. "Ursus arctos", "Lutra lutra")
+  if (!matchedRule) {
+    const binomialMatch = normalized.match(/\b([A-Z][a-z]{2,}\s+[a-z]{3,})\b/);
+    if (binomialMatch && binomialMatch[1]) {
+      const candidate = binomialMatch[1];
+      const isTurkishStopPhrase = /\b(türkiye|türkiyede|kayıt|kayıtları|kayıtlarını|gözlem|gözlemleri|yıllık|verileri|raporu|bana|lütfen|hakkında|nedir|hangi|nerede|arşiv|analiz|harita|atlas|tüm|bölge|bölgeler|iller|yıllara|en|fazla|bulunan|bilgi|ver)\b/i.test(candidate);
+      if (!isTurkishStopPhrase) {
+        scientificName = candidate;
+        turkishName = candidate;
+      }
+    }
+  }
+
+  // 3. Fallback to dictionary direct lookups
+  if (!scientificName) {
+    const lowerClean = normalized.toLowerCase();
+    for (const [key, val] of Object.entries(COMMON_TURKISH_SPECIES)) {
+      const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(?:^|[^\\p{L}])${escaped}(?:lar|ler)?(?:[^\\p{L}]|$)`, 'iu');
+      if (regex.test(lowerClean)) {
+        scientificName = val.scientificName;
+        turkishName = val.turkishName;
+        break;
+      }
+    }
+  }
+
+  if (!scientificName) {
+    return {
+      foundSpecies: false,
+      error: 'Araştırılacak canlı türü tespit edilemedi. Lütfen araştırmak istediğiniz canlı türünün adını (Türkçe veya bilimsel adıyla) belirtin (Örn: Bozayı, Vaşak, Bozkurt, Caretta caretta, Akdeniz Foku veya Ursus arctos).',
+    };
+  }
+
+  // 4. Extract Year Range
+  const currentYear = new Date().getFullYear();
+  let startYear: number | undefined;
+  let endYear: number | undefined;
+  let dateRangeText = 'Tüm Tarihsel Kayıtlar (GBIF Arşivi)';
+
+  // "son X yıl" / "son X yıllık" / "son X yılda" / "son X yıldaki" / "son X yılın"
+  const lastNYearsMatch = normalized.match(/\bson\s+(\d+|on|beş|yirmi|üç|iki)\s+yıl(?:lık|da|daki|dan|den|ın|in|ı|i)?\b/iu);
+  if (lastNYearsMatch) {
+    let numYears = 10;
+    const word = lastNYearsMatch[1].toLowerCase();
+    if (word === 'on') numYears = 10;
+    else if (word === 'beş') numYears = 5;
+    else if (word === 'yirmi') numYears = 20;
+    else if (word === 'üç') numYears = 3;
+    else if (word === 'iki') numYears = 2;
+    else numYears = parseInt(word, 10);
+
+    if (!isNaN(numYears) && numYears > 0) {
+      startYear = currentYear - numYears;
+      endYear = currentYear;
+      dateRangeText = `Son ${numYears} yıl (${startYear} – ${endYear})`;
+    }
+  }
+
+  // "YYYY - YYYY" or "YYYY ile YYYY"
+  if (!startYear) {
+    const rangeMatch = normalized.match(/\b(19\d\d|20\d\d)\s*(?:[-–—/]|ile|ve)\s*(19\d\d|20\d\d)\b/iu);
+    if (rangeMatch) {
+      startYear = parseInt(rangeMatch[1], 10);
+      endYear = parseInt(rangeMatch[2], 10);
+      if (startYear > endYear) {
+        const tmp = startYear;
+        startYear = endYear;
+        endYear = tmp;
+      }
+      dateRangeText = `${startYear} – ${endYear} Yılları Arası`;
+    }
+  }
+
+  // "YYYY sonrası" / "YYYY yılından sonra"
+  if (!startYear) {
+    const afterMatch = normalized.match(/\b(19\d\d|20\d\d)\s*(?:yılından\s+sonra|sonrası|itibaren)\b/iu);
+    if (afterMatch) {
+      startYear = parseInt(afterMatch[1], 10);
+      endYear = currentYear;
+      dateRangeText = `${startYear} Yılından Günümüze`;
+    }
+  }
+
+  // 5. Extract Country
+  let country = defaultCountry === 'TR' ? 'Türkiye' : 'Küresel / Tüm Dünya';
+  let countryCode = defaultCountry;
+
+  if (/\b(küresel|dünya|dünyada|dünya\s+genelinde|global)\b/iu.test(normalized)) {
+    country = 'Küresel / Tüm Dünya';
+    countryCode = '';
+  } else if (/\b(türkiye(?:'deki|deki|'de|de)?|turkey|anadolu(?:'da|da)?)\b/iu.test(normalized)) {
+    country = 'Türkiye';
+    countryCode = 'TR';
+  }
+
+  // 6. Extract Analysis Type and Geographic Scope
+  const analysisType = /\b(yıllara\s+göre|zamansal|yıllık|değişim|trend|artış|azalış)\b/iu.test(normalized)
+    ? 'Yıllık gözlem sayıları ve zamansal trend analizi'
+    : 'Genel biyoçeşitlilik ve arşiv kayıt analizi';
+
+  const geographicScope = /\b(il|iller|bölge|bölgeler|dağılım|nerede|yoğunluk|sıcak\s+nokta)\b/iu.test(normalized)
+    ? 'En fazla kayıt bulunan iller ve coğrafi sıcak noktalar'
+    : 'Ulusal ve bölgesel coğrafi dağılım';
+
+  return {
+    foundSpecies: true,
+    resolvedScientificName: scientificName,
+    parameters: {
+      speciesName: turkishName || scientificName,
+      scientificName,
+      country,
+      countryCode,
+      startYear,
+      endYear,
+      dateRangeText,
+      analysisType,
+      geographicScope,
+    },
+  };
+}
+
 
 // Keşif alanı için 6 ana kategoride seçilmiş türler
 export const DISCOVERY_SPECIMENS: DiscoverySpecimen[] = [
@@ -405,17 +781,46 @@ export function getIucnLabel(code?: string): string {
 
 /**
  * Belirli bir canlı türünün GBIF gözlem verilerini, yıllara ve bölgelere göre dağılımını çekme
- * @param scientificName Bilimsel ad (örn: Ursus arctos)
- * @param countryCode Ülke kodu (varsayılan: TR - Türkiye, boş string tüm dünya)
+ * @param scientificName Bilimsel ad veya Türkçe ad (örn: Ursus arctos, Bozayı)
+ * @param optionsOrCountry Ülke kodu veya detaylı filtre opsiyonları
  */
-export async function fetchSpeciesAnalysis(scientificName: string, countryCode: string = 'TR'): Promise<SpeciesAnalysis> {
-  // Önce türün kimlik bilgilerini çöz
+export async function fetchSpeciesAnalysis(
+  scientificName: string,
+  optionsOrCountry: string | FetchSpeciesOptions = 'TR'
+): Promise<SpeciesAnalysis> {
+  // Normalize options
+  const options: FetchSpeciesOptions = typeof optionsOrCountry === 'string'
+    ? { countryCode: optionsOrCountry }
+    : (optionsOrCountry || {});
+
+  const countryCode = options.countryCode !== undefined ? options.countryCode : 'TR';
+  const startYear = options.startYear;
+  const endYear = options.endYear;
+  const limit = options.limit || 300;
+  const fetchExtraPages = options.fetchExtraPages ?? true;
+
+  // 1. Türün taksonomik kimlik ve taxonKey (usageKey) bilgilerini çöz
   const species = await matchSpecies(scientificName);
 
-  // GBIF Occurrence Search URL'i oluştur
+  // 2. GBIF Occurrence Search URL parametrelerini oluştur
   const countryParam = countryCode ? `&country=${countryCode}` : '';
+  
+  let yearParam = '';
+  if (startYear && endYear) {
+    yearParam = `&year=${startYear},${endYear}`;
+  } else if (startYear) {
+    yearParam = `&year=${startYear},2030`;
+  } else if (endYear) {
+    yearParam = `&year=1800,${endYear}`;
+  }
+
+  // TaxonKey (usageKey) varsa en kesin taksonomik filtre olarak kullan
   const searchName = species.canonicalName || species.scientificName;
-  const gbifUrl = `https://api.gbif.org/v1/occurrence/search?scientificName=${encodeURIComponent(searchName)}${countryParam}&limit=300&facet=year&facet=stateProvince&facetLimit=60`;
+  const taxonParam = species.usageKey 
+    ? `taxonKey=${species.usageKey}` 
+    : `scientificName=${encodeURIComponent(searchName)}`;
+
+  const gbifUrl = `https://api.gbif.org/v1/occurrence/search?${taxonParam}${countryParam}${yearParam}&limit=${limit}&facet=year&facet=stateProvince&facetLimit=100`;
 
   let totalRecords = 0;
   let yearlyStats: YearlyStat[] = [];
@@ -427,11 +832,27 @@ export async function fetchSpeciesAnalysis(scientificName: string, countryCode: 
     const res = await fetch(gbifUrl);
     const data = await res.json();
 
-    totalRecords = data.count || 0;
+    totalRecords = typeof data.count === 'number' ? data.count : 0;
+
+    // Sayfalama (Pagination): Eğer toplam kayıt 300'den fazlaysa, harita ve detay için 2. sayfayı da al
+    if (totalRecords > limit && fetchExtraPages) {
+      try {
+        const page2Offset = limit;
+        const page2Limit = Math.min(300, totalRecords - limit);
+        const page2Url = `https://api.gbif.org/v1/occurrence/search?${taxonParam}${countryParam}${yearParam}&offset=${page2Offset}&limit=${page2Limit}`;
+        const res2 = await fetch(page2Url);
+        const data2 = await res2.json();
+        if (data2.results && Array.isArray(data2.results)) {
+          data.results = [...(data.results || []), ...data2.results];
+        }
+      } catch (page2Err) {
+        console.warn('GBIF page 2 fetch failed:', page2Err);
+      }
+    }
 
     // Yıl verilerini ayrıştır (GBIF facets)
     const yearFacet = data.facets?.find((f: { field: string }) => f.field === 'YEAR');
-    if (yearFacet && yearFacet.counts?.length > 0) {
+    if (yearFacet && Array.isArray(yearFacet.counts) && yearFacet.counts.length > 0) {
       yearlyStats = yearFacet.counts
         .filter((c: { name: string; count: number }) => c.name && !isNaN(Number(c.name)))
         .map((c: { name: string; count: number }) => ({
@@ -445,21 +866,27 @@ export async function fetchSpeciesAnalysis(scientificName: string, countryCode: 
     const stateFacet = data.facets?.find((f: { field: string }) => f.field === 'STATE_PROVINCE');
     let facetRegionTotal = 0;
 
-    if (stateFacet && stateFacet.counts?.length > 0) {
-      regionalStats = stateFacet.counts
-        .filter((c: { name: string; count: number }) => c.name && c.name.trim().length > 0)
-        .map((c: { name: string; count: number }) => {
+    if (stateFacet && Array.isArray(stateFacet.counts) && stateFacet.counts.length > 0) {
+      const validRegionMap = new Map<string, number>();
+
+      stateFacet.counts.forEach((c: { name: string; count: number }) => {
+        const cleanName = cleanProvinceName(c.name);
+        if (cleanName) {
+          validRegionMap.set(cleanName, (validRegionMap.get(cleanName) || 0) + c.count);
           facetRegionTotal += c.count;
-          return {
-            region: cleanProvinceName(c.name),
-            count: c.count,
-            percentage: totalRecords > 0 ? Math.round((c.count / totalRecords) * 100) : 0
-          };
-        })
+        }
+      });
+
+      regionalStats = Array.from(validRegionMap.entries())
+        .map(([region, count]) => ({
+          region,
+          count,
+          percentage: totalRecords > 0 ? (count / totalRecords) * 100 : 0
+        }))
         .sort((a: RegionStat, b: RegionStat) => b.count - a.count);
     }
 
-    // Gerçek koordinatlı gözlem kayıtlarını ayıkla (Leaflet için)
+    // Gerçek koordinatlı gözlem kayıtlarını ayıkla
     if (data.results && Array.isArray(data.results)) {
       occurrences = data.results.map((r: Record<string, unknown>) => ({
         key: Number(r.key),
@@ -484,11 +911,11 @@ export async function fetchSpeciesAnalysis(scientificName: string, countryCode: 
       }));
     }
 
-    // Eğer GBIF facets boş döndüyse (bazı genel sorgularda), gelen sonuçlar üzerinden topla
+    // Eğer GBIF facets boşsa, gelen occurrence sonuçları üzerinden topla
     if (yearlyStats.length === 0 && occurrences.length > 0) {
       const yearMap = new Map<number, number>();
       occurrences.forEach(o => {
-        if (o.year) {
+        if (o.year && !isNaN(o.year)) {
           yearMap.set(o.year, (yearMap.get(o.year) || 0) + 1);
         }
       });
@@ -508,7 +935,7 @@ export async function fetchSpeciesAnalysis(scientificName: string, countryCode: 
         .map(([region, count]) => ({
           region,
           count,
-          percentage: totalRecords > 0 ? Math.round((count / totalRecords) * 100) : 0
+          percentage: totalRecords > 0 ? (count / totalRecords) * 100 : 0
         }))
         .sort((a, b) => b.count - a.count);
     }
@@ -520,9 +947,15 @@ export async function fetchSpeciesAnalysis(scientificName: string, countryCode: 
     console.error('GBIF occurrences fetch failed:', err);
   }
 
-  // Koordinatı olan kayıtlar
+  // Koordinatı DOĞRULANMIŞ olan kayıtlar (harita ve mekansal analiz için)
   const mappedRecords = occurrences.filter(
-    o => typeof o.decimalLatitude === 'number' && typeof o.decimalLongitude === 'number' && !isNaN(o.decimalLatitude) && !isNaN(o.decimalLongitude)
+    o => typeof o.decimalLatitude === 'number' &&
+         typeof o.decimalLongitude === 'number' &&
+         !isNaN(o.decimalLatitude) &&
+         !isNaN(o.decimalLongitude) &&
+         o.decimalLatitude >= -90 && o.decimalLatitude <= 90 &&
+         o.decimalLongitude >= -180 && o.decimalLongitude <= 180 &&
+         !(o.decimalLatitude === 0 && o.decimalLongitude === 0)
   );
 
   // Yıl aralığı
@@ -556,18 +989,31 @@ export async function fetchSpeciesAnalysis(scientificName: string, countryCode: 
     lowestYear,
     yearlyStats,
     regionalStats,
-    occurrences: mappedRecords, // Harita için sadece gerçek koordinatı olanlar
+    occurrences: mappedRecords, // Haritada yalnızca doğrulanmış gerçek koordinatlar
+    appliedFilters: {
+      countryCode,
+      countryName: countryCode === 'TR' ? 'Türkiye' : 'Tüm Dünya',
+      startYear,
+      endYear,
+      taxonKey: species.usageKey,
+    },
     queriedAt: new Date().toISOString()
   };
 }
 
 /**
- * İl adlarındaki olası fazlalıkları temizleme
+ * İl adlarındaki olası fazlalıkları temizleme ve doğrula
  */
-function cleanProvinceName(raw: string): string {
-  let name = raw.replace(/\b(Province|İli|Ili|Vilayeti)\b/gi, '').trim();
-  // İlk harfleri düzgün büyük yapma
-  return name.charAt(0).toUpperCase() + name.slice(1);
+export function cleanProvinceName(raw?: string): string {
+  if (!raw || typeof raw !== 'string') return '';
+  let name = raw.replace(/\b(Province|İli|Ili|Vilayeti|Valiliği|State|Region|District)\b/gi, '').trim();
+  
+  // Rakam, çok kısa veya anlamsız stringleri filtrele
+  if (/^\d+$/.test(name) || name.length < 2 || /^(null|undefined|tr|turkey|türkiye|none|unknown)$/i.test(name)) {
+    return '';
+  }
+  
+  return name.charAt(0).toLocaleUpperCase('tr-TR') + name.slice(1);
 }
 
 /**

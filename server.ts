@@ -4,8 +4,13 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
-import { fetchSpeciesAnalysis, matchSpecies, COMMON_TURKISH_SPECIES } from './src/services/gbif.ts';
-import { SpeciesAnalysis } from './src/types/biodiversity.ts';
+import { 
+  fetchSpeciesAnalysis, 
+  matchSpecies, 
+  extractSpeciesAndParameters,
+  COMMON_TURKISH_SPECIES 
+} from './src/services/gbif.ts';
+import { SpeciesAnalysis, ResearchParameters } from './src/types/biodiversity.ts';
 
 dotenv.config();
 
@@ -40,6 +45,14 @@ const fetchGbifDataDeclaration: FunctionDeclaration = {
         type: Type.STRING,
         description: 'Two-letter ISO country code. Use "TR" for Turkey, or empty string "" for worldwide global data.',
       },
+      startYear: {
+        type: Type.INTEGER,
+        description: 'Start year for the occurrence query if specified (e.g. 2016).',
+      },
+      endYear: {
+        type: Type.INTEGER,
+        description: 'End year for the occurrence query if specified (e.g. 2026).',
+      },
     },
     required: ['scientificOrCommonName'],
   },
@@ -56,7 +69,6 @@ app.post('/api/agent/research', async (req: Request, res: Response): Promise<voi
 
   const userQuery = query.trim();
   const steps: AgentExecutionStep[] = [];
-  let primaryAnalysis: SpeciesAnalysis | null = null;
 
   const addStep = (title: string, detail: string, status: AgentExecutionStep['status'] = 'completed') => {
     steps.push({
@@ -68,9 +80,107 @@ app.post('/api/agent/research', async (req: Request, res: Response): Promise<voi
     });
   };
 
-  addStep('Görev ve Hedef Canlı Çözümleniyor', `Kullanıcı sorgusu: "${userQuery}" inceleniyor. Taksonomi ve coğrafi parametreler tespit ediliyor.`, 'in_progress');
+  addStep('Görev Analizi Başlatıldı', `Kullanıcı sorgusu: "${userQuery}" inceleniyor.`, 'in_progress');
 
-  // Check if Gemini API Key is available and valid
+  // Adım 1: Doğal dil sorgusundan parametreleri ve türü ayıkla
+  const paramResult = extractSpeciesAndParameters(userQuery, country);
+
+  // Kural: Tür adı tespit edilemiyorsa ASLA araştırma raporu üretme!
+  if (!paramResult.foundSpecies || !paramResult.parameters) {
+    addStep('Tür Tespit Edilemedi', paramResult.error || 'Canlı türü saptanamadı.', 'failed');
+    res.json({
+      success: false,
+      requiresClarification: true,
+      error: paramResult.error,
+      steps,
+      analysis: null,
+      speciesName: null,
+      parameters: null,
+      agentMode: 'input_validation',
+    });
+    return;
+  }
+
+  const params: ResearchParameters = paramResult.parameters;
+  addStep(
+    'Araştırma Parametreleri Ayrıştırıldı',
+    `Tür: ${params.speciesName} (${params.scientificName}) | Coğrafya: ${params.country} (${params.countryCode || 'Global'}) | Tarih: ${params.dateRangeText} | Analiz: ${params.analysisType}`
+  );
+
+  // Adım 2: GBIF'ten gerçek verileri çek
+  let primaryAnalysis: SpeciesAnalysis | null = null;
+
+  try {
+    addStep(
+      'GBIF Açık Bilim Sorgusu Yapılıyor',
+      `GBIF API üzerinden ${params.scientificName} için veriler getiriliyor (Filtre: ${params.dateRangeText}, Coğrafya: ${params.countryCode || 'Global'})...`,
+      'in_progress'
+    );
+
+    primaryAnalysis = await fetchSpeciesAnalysis(params.scientificName, {
+      countryCode: params.countryCode,
+      startYear: params.startYear,
+      endYear: params.endYear,
+      fetchExtraPages: true,
+    });
+
+    addStep(
+      'GBIF Açık Bilim Verileri Alındı',
+      `Toplam ${primaryAnalysis.totalRecords} kayıt, ${primaryAnalysis.mappedRecordsCount} doğrulanmış GPS koordinatı, ${primaryAnalysis.regionalStats.length} il verisi arşivlendi.`
+    );
+  } catch (gbifErr: any) {
+    console.error('GBIF fetch error:', gbifErr);
+    addStep('GBIF Bağlantı Hatası', 'GBIF API sunucularına bağlanırken bir sorun oluştu.', 'failed');
+    res.status(500).json({
+      success: false,
+      error: 'GBIF açık bilim verilerine erişilirken bir hata oluştu: ' + (gbifErr.message || 'Bilinmeyen hata'),
+      steps,
+    });
+    return;
+  }
+
+  // Kural: Sıfır (0) kayıt bulunursa sahte rapor üretme!
+  if (primaryAnalysis.totalRecords === 0) {
+    addStep('Sıfır Kayıt Bildirimi', 'GBIF arşivinde belirtilen kriterlere uygun gözlem kaydı bulunamadı.');
+
+    const zeroRecordReport = `### ⚠️ GBIF Açık Bilim Arşivinde Kayıt Bulunamadı
+
+- **İncelenen Tür:** ${primaryAnalysis.species.turkishName || primaryAnalysis.species.canonicalName} (*${primaryAnalysis.species.scientificName}*)
+- **Hedef Coğrafya:** ${primaryAnalysis.countryName} (${params.countryCode || 'Tüm Dünya'})
+- **Sorgulanan Tarih Aralığı:** ${params.dateRangeText}
+- **Bulunan Toplam Kayıt:** **0 adet**
+
+---
+
+### 🔍 Bilimsel Durum Değerlendirmesi
+GBIF (Global Biodiversity Information Facility) açık arşivinde belirtilen filtre kriterlerinde doğrulanmış dijital gözlem kaydı bulunmamaktadır.
+
+**Olası Nedenler:**
+1. **Coğrafi Kapsam:** Canlı türü seçilen coğrafyada doğal olarak yayılış göstermiyor olabilir.
+2. **Dijital Veri Eksikliği:** Bölgedeki saha araştırmaları henüz GBIF veritabanına aktarılmamış veya vatandaş bilimi gözlemleri doğrulanmamış olabilir.
+3. **Tarih Aralığı Kısıtı:** Belirtilen yıllar arasında bu canlıya ait gözlem seferi kaydedilmemiş olabilir.
+
+---
+
+### 💡 Çözüm ve Tavsiyeler
+- Arama kapsamını sağ üstteki filtreden **"Tüm Dünya (Global)"** olarak genişleterek küresel yayılımı inceleyebilirsiniz.
+- Tarih filtresini kaldırarak tüm arşiv geçmişine bakabilirsiniz.
+- Farklı bir canlı türü seçerek araştırmanızı sürdürebilirsiniz.`;
+
+    res.json({
+      success: true,
+      isZeroRecords: true,
+      report: zeroRecordReport,
+      steps,
+      analysis: primaryAnalysis,
+      speciesName: params.speciesName,
+      parameters: params,
+      agentMode: 'gbif_verified',
+    });
+    return;
+  }
+
+  // Adım 3: Gerçek verileri sentezle (Gemini 2.5 Flash veya GBIF Analitik Motoru)
   const rawApiKey = process.env.GEMINI_API_KEY?.trim();
   const isValidApiKey = Boolean(rawApiKey && rawApiKey.length > 15 && !rawApiKey.includes('MY_GEMINI_API_KEY'));
 
@@ -86,17 +196,17 @@ app.post('/api/agent/research', async (req: Request, res: Response): Promise<voi
       });
 
       const systemInstruction = `Sen "Canlı Atlası" biyoçeşitlilik platformunun kıdemli Biyoçeşitlilik Araştırma Ajanısın (AI Research Agent).
-Görevin: Kullanıcının araştırma talebini analiz edip gerekli olduğunda 'fetchGbifSpeciesData' fonksiyonunu çağırarak GBIF bilimsel veri tabanından gerçek kayıtları çekmek ve kapsamlı bir bilimsel sentez raporu oluşturmaktır.
+Görevin: GBIF açık bilim veritabanından çekilmiş gerçek verileri analiz edip kullanıcıya anlaşılır, Türkçe ve akademik bir araştırma raporu sunmaktır.
 
 KURALLAR:
-1. Asla veri veya koordinat uydurma. Sadece GBIF fonksiyonundan dönen gerçek gözlem verilerini analiz et.
+1. Asla veri, il veya koordinat uydurma. Yalnızca sana sağlanan gerçek GBIF analiz verilerini kullan.
 2. Bilimsel Metodoloji İlkesi: Gözlem kayıtlarının sayısını canlının gerçek popülasyon sayısı olarak yorumlama. Vatandaş bilimi, dijitalleşme ve araştırma seferlerinin sıklığı kayıt sayısını artırır. Bu ayrımı raporda açıkça belirt.
 3. Raporu şu başlıklar altında Markdown formatında ve akıcı Türkçe ile sun:
    - **🔬 1. Yönetici Özeti & Tür Kimliği** (Türkçe adı, bilimsel adı, familyası ve IUCN Kırmızı Liste statüsü)
    - **📊 2. GBIF Gözlem Trendleri & Zaman Dağılımı** (Toplam kayıt, GPS koordinatlı oranı, en çok gözlem yapılan zirve yılı ve son durum)
    - **📍 3. Coğrafi Yayılım & Bölgesel Sıcak Noktalar** (En yoğun kayıt bulunan iller/bölgeler ve yaşam alanları)
    - **🛡️ 4. Koruma Statüsü & Tehdit Değerlendirmesi** (IUCN durumu, ekolojik tehditler)
-   - **📌 5. Araştırmacı Tavsiyeleri & Bilimsel Metodoloji Notu**
+   - **📌 5. Bilimsel Metodoloji Notu & Araştırmacı Tavsiyeleri**
 4. Kısa, teknik ve güvenilir ol. Kaynak olarak GBIF ve iNaturalist'e atıfta bulun.`;
 
       // Helper to execute with timeout
@@ -107,185 +217,64 @@ KURALLAR:
         ]);
       };
 
-      // Turn 1: Let Gemini identify the species and call the tool
-      const turn1Response = await withTimeout(
+      const topProvinces = primaryAnalysis.regionalStats.slice(0, 5).map(r => `${r.region} (%${r.percentage.toFixed(1)})`).join(', ');
+
+      const promptForGemini = `Araştırma Görevi: ${userQuery}
+Parametreler:
+- Canlı Türü: ${params.speciesName} (${params.scientificName})
+- Coğrafya: ${primaryAnalysis.countryName}
+- Tarih Aralığı: ${params.dateRangeText}
+
+GBIF Gerçek Verileri:
+- Toplam Doğrulanmış Kayıt: ${primaryAnalysis.totalRecords}
+- GPS Koordinatlı Kayıt Sayısı: ${primaryAnalysis.mappedRecordsCount}
+- Konum Belirtilmemiş Kayıt Sayısı: ${primaryAnalysis.unlocatedCount}
+- En Çok Gözlem Yapılan Zirve Yılı: ${primaryAnalysis.peakYear ? `${primaryAnalysis.peakYear.year} (${primaryAnalysis.peakYear.count} kayıt)` : 'Belirtilmemiş'}
+- En Düşük Gözlem Yılı: ${primaryAnalysis.lowestYear ? `${primaryAnalysis.lowestYear.year} (${primaryAnalysis.lowestYear.count} kayıt)` : 'Belirtilmemiş'}
+- En Çok Kayıt Bulunan İller: ${topProvinces || 'Bölgesel veri kısıtlı'}
+- IUCN Koruma Durumu: ${primaryAnalysis.species.iucnStatus || 'LC'} (${primaryAnalysis.species.iucnCategoryName || 'Değerlendirilmiş'})
+
+Lütfen bu gerçek veriler ışığında bilimsel araştırma raporunu oluştur.`;
+
+      const aiResponse = await withTimeout(
         ai.models.generateContent({
           model: 'gemini-2.5-flash',
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: `Araştırma Görevi: ${userQuery}\nVarsayılan Ülke: ${country}` }],
-            },
-          ],
-          config: {
-            systemInstruction,
-            tools: [{ functionDeclarations: [fetchGbifDataDeclaration] }],
-          },
+          contents: [{ role: 'user', parts: [{ text: promptForGemini }] }],
+          config: { systemInstruction },
         })
       );
 
-      const functionCalls = turn1Response.functionCalls;
-
-      if (functionCalls && functionCalls.length > 0) {
-        const call = functionCalls[0];
-        const args = (call.args || {}) as { scientificOrCommonName?: string; countryCode?: string };
-        const targetSpecies = args.scientificOrCommonName || userQuery;
-        const targetCountry = typeof args.countryCode === 'string' ? args.countryCode : country;
-
-        addStep(
-          'GBIF Veri Fonksiyonu Çağrıldı',
-          `Tespit edilen tür: "${targetSpecies}" (Hedef Coğrafya: ${targetCountry || 'Global'}). GBIF API'sine sorgu gönderiliyor.`
-        );
-
-        // Execute tool call server-side
-        const analysisData = await fetchSpeciesAnalysis(targetSpecies, targetCountry);
-        primaryAnalysis = analysisData;
-
-        addStep(
-          'GBIF Açık Bilim Verileri Çözümlendi',
-          `Toplam ${analysisData.totalRecords} kayıt, ${analysisData.mappedRecordsCount} GPS koordinatı, ${analysisData.regionalStats.length} il verisi başarıyla alındı.`
-        );
-
-        // Turn 2: Feed functionResponse back to Gemini for the scientific synthesis
-        const turn2Response = await withTimeout(
-          ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [
-              {
-                role: 'user',
-                parts: [{ text: `Araştırma Görevi: ${userQuery}\nVarsayılan Ülke: ${country}` }],
-              },
-              turn1Response.candidates?.[0]?.content as any,
-              {
-                role: 'user',
-                parts: [
-                  {
-                    functionResponse: {
-                      name: 'fetchGbifSpeciesData',
-                      id: call.id,
-                      response: {
-                        species: {
-                          scientificName: analysisData.species.scientificName,
-                          canonicalName: analysisData.species.canonicalName,
-                          turkishName: analysisData.species.turkishName,
-                          family: analysisData.species.family,
-                          iucnStatus: analysisData.species.iucnStatus,
-                          iucnCategoryName: analysisData.species.iucnCategoryName,
-                        },
-                        countryName: analysisData.countryName,
-                        totalRecords: analysisData.totalRecords,
-                        mappedRecordsCount: analysisData.mappedRecordsCount,
-                        unmappedRecordsCount: analysisData.unmappedRecordsCount,
-                        dateRange: analysisData.dateRange,
-                        peakYear: analysisData.peakYear,
-                        lowestYear: analysisData.lowestYear,
-                        topRegions: analysisData.regionalStats.slice(0, 8),
-                        recentYearlyStats: analysisData.yearlyStats.slice(-10),
-                      },
-                    },
-                  },
-                ],
-              },
-            ],
-            config: {
-              systemInstruction,
-              tools: [{ functionDeclarations: [fetchGbifDataDeclaration] }],
-            },
-          })
-        );
-
-        const finalReport = turn2Response.text || 'Araştırma sentezi tamamlandı.';
-        addStep('Bilimsel Araştırma Raporu Sentezlendi', 'Veriler ve akademik değerlendirme başarıyla derlendi.');
-
+      const aiText = aiResponse.text;
+      if (aiText && aiText.trim().length > 100) {
+        addStep('Bilimsel Araştırma Raporu Sentezlendi', 'Gemini 2.5 Flash yapay zekâ modeli ile akademik sentez tamamlandı.');
         res.json({
           success: true,
-          report: finalReport,
+          report: aiText,
           steps,
           analysis: primaryAnalysis,
-          speciesName: primaryAnalysis.species.turkishName || primaryAnalysis.species.canonicalName,
+          speciesName: params.speciesName,
+          parameters: params,
           agentMode: 'gemini_function_calling',
-        });
-        return;
-      } else if (turn1Response.text) {
-        // Direct answer without tool call
-        addStep('Doğrudan Yanıt Oluşturuldu', 'Sorgu doğrudan çözümlendi.');
-        res.json({
-          success: true,
-          report: turn1Response.text,
-          steps,
-          analysis: null,
-          agentMode: 'gemini_direct',
         });
         return;
       }
     } catch (aiError) {
-      console.warn('Gemini function calling fallback triggered:', aiError);
-      addStep('AI Modeli Yedek Motoru Devreye Alındı', 'GBIF bilimsel analitik motoru üzerinden doğrudan veri analizi gerçekleştiriliyor.');
+      console.warn('Gemini generation fallback triggered:', aiError);
+      addStep('GBIF Analitik Motoru Devreye Alındı', 'Doğrudan GBIF bilimsel veri analiz motoru ile rapor derleniyor.');
     }
   }
 
-  // Fallback Engine (Runs when no API key is present or AI service fails):
-  // Deterministic biological extraction + live GBIF query
-  try {
-    let resolvedQuery = userQuery;
-    let targetCountry = country;
-    const lower = userQuery.toLowerCase();
+  // Fallback Engine: Deterministic scientific report directly from live GBIF verified data
+  const s = primaryAnalysis.species;
+  const name = params.speciesName;
+  const topRegionsText = primaryAnalysis.regionalStats.slice(0, 5)
+    .map((r, i) => `${i + 1}. **${r.region}** (${r.count} kayıt - %${r.percentage.toFixed(1)})`)
+    .join('\n');
+  const peakText = primaryAnalysis.peakYear 
+    ? `${primaryAnalysis.peakYear.year} yılı (${primaryAnalysis.peakYear.count} gözlem)` 
+    : 'Veri yetersiz';
 
-    // Check geography intent
-    if (/\b(küresel|dünya|global|dünyada|dünya genelinde)\b/i.test(lower)) {
-      targetCountry = '';
-    } else if (/\b(türkiye|türkiye'de|turkey)\b/i.test(lower)) {
-      targetCountry = 'TR';
-    }
-
-    // 1. Check predefined Turkish common names first (longest match first with word boundaries)
-    const sortedKeys = Object.keys(COMMON_TURKISH_SPECIES).sort((a, b) => b.length - a.length);
-    let foundCommon = false;
-
-    for (const key of sortedKeys) {
-      const regex = new RegExp(`(?:^|\\s|[.,;!?()""''])${key}(?:$|\\s|[.,;!?()""''])`, 'i');
-      if (regex.test(lower)) {
-        resolvedQuery = COMMON_TURKISH_SPECIES[key].scientificName;
-        foundCommon = true;
-        break;
-      }
-    }
-
-    // 2. Check for Latin binomial names (e.g. "Ursus arctos", "Monachus monachus") if not found in common dictionary
-    if (!foundCommon) {
-      const latinMatch = userQuery.match(/\b([A-Z][a-z]{2,}\s+[a-z]{3,})\b/);
-      if (latinMatch && latinMatch[1] && !/\b(türkiye|türkiyede|kayıt|gözlem)\b/i.test(latinMatch[1])) {
-        resolvedQuery = latinMatch[1];
-      } else {
-        // 3. Clean stopwords to isolate unknown species keyword
-        const cleaned = lower
-          .replace(/\b(türkiye'de|türkiyede|türkiye|son|yılda|yıllık|gözlem|kayıtlarını|kayıtları|kayıt|sayısı|analiz|et|nedir|hakkında|araştır|nerede|yoğunluğu|dağılımı|durumu|durumunu|popülasyon|bilgi|ver|bana|istiyorum|çıkar|raporu)\b/gi, ' ')
-          .replace(/[.,;!?()""'']/g, ' ')
-          .trim()
-          .replace(/\s+/g, ' ');
-
-        if (cleaned.length > 2) {
-          resolvedQuery = cleaned;
-        }
-      }
-    }
-
-    addStep('Tür Belirlendi', `Hedef canlı: "${resolvedQuery}" (Coğrafya: ${targetCountry || 'Global'}). GBIF veri tabanına bağlanılıyor...`);
-    const analysis = await fetchSpeciesAnalysis(resolvedQuery, targetCountry);
-    primaryAnalysis = analysis;
-
-    addStep(
-      'GBIF Gözlem ve Koordinat Kayıtları Alındı',
-      `Toplam ${analysis.totalRecords} kayıt ve ${analysis.mappedRecordsCount} GPS koordinatı başarıyla işlendi.`
-    );
-
-    // Build academic report
-    const s = analysis.species;
-    const name = s.turkishName || s.canonicalName;
-    const topRegionsText = analysis.regionalStats.slice(0, 5).map((r, i) => `${i + 1}. **${r.region}** (${r.count} kayıt - %${r.percentage.toFixed(1)})`).join('\n');
-    const peakText = analysis.peakYear ? `${analysis.peakYear.year} yılı (${analysis.peakYear.count} gözlem)` : 'Veri yetersiz';
-
-    const fallbackReport = `### 🔬 1. Yönetici Özeti & Tür Kimliği
+  const deterministicReport = `### 🔬 1. Yönetici Özeti & Tür Kimliği
 - **Türkçe Adı:** ${name}
 - **Bilimsel Adı:** *${s.scientificName}*
 - **Sınıflandırma:** ${s.kingdom || 'Animalia'} › ${s.phylum || 'Chordata'} › ${s.family || 'Familya'}
@@ -293,44 +282,40 @@ KURALLAR:
 
 ---
 
-### 📊 2. GBIF Gözlem Trendleri & Zaman Dağılımı (${analysis.countryName})
-- **Toplam Arşiv Kaydı:** ${analysis.totalRecords.toLocaleString('tr-TR')} adet
-- **Doğrulanmış GPS Koordinatlı:** ${analysis.mappedRecordsCount} kayıt (%${analysis.totalRecords > 0 ? Math.round((analysis.mappedRecordsCount / analysis.totalRecords) * 100) : 0})
-- **Tarih Aralığı:** ${analysis.dateRange.minYear || '—'} – ${analysis.dateRange.maxYear || '—'}
+### 📊 2. GBIF Gözlem Trendleri & Zaman Dağılımı (${primaryAnalysis.countryName})
+- **Sorgulanan Tarih Aralığı:** ${params.dateRangeText}
+- **Toplam Arşiv Kaydı:** ${primaryAnalysis.totalRecords.toLocaleString('tr-TR')} adet
+- **Doğrulanmış GPS Koordinatlı:** ${primaryAnalysis.mappedRecordsCount} kayıt (%${primaryAnalysis.totalRecords > 0 ? Math.round((primaryAnalysis.mappedRecordsCount / primaryAnalysis.totalRecords) * 100) : 0})
+- **Konum/İl Bilgisi Eksik Kayıt:** ${primaryAnalysis.unlocatedCount} adet
 - **En Yüksek Gözlem Kaydı (Zirve):** **${peakText}**
 
 ---
 
 ### 📍 3. Coğrafi Yayılım & Bölgesel Sıcak Noktalar
-Türkiye genelinde en fazla gözlem kaydı bulunan ilk 5 il/bölge:
+${primaryAnalysis.countryName} genelinde en fazla gözlem kaydı bulunan ilk 5 il/bölge:
 ${topRegionsText || 'Bölgesel veri bulunamadı.'}
 
 ---
 
 ### 🛡️ 4. Koruma Statüsü & Ekolojik Değerlendirme
-*${s.scientificName}* türü, habitat parçalanması ve insan baskısı faktörleri açısından yakından izlenmesi gereken biyoçeşitlilik göstergesidir. Doğrulanmış GPS noktaları harita üzerinde işaretlenmiştir.
+*${s.scientificName}* türü, habitat bütünlüğü ve ekolojik koruma koridorları açısından izlenmesi gereken kilit bir taksondur. Doğrulanmış GPS noktaları harita üzerinde incelenebilir.
 
 ---
 
 ### 📌 5. Bilimsel Metodoloji Notu
-GBIF veri tabanındaki yıllık gözlem dalgalanmaları doğrudan popülasyon artışını veya azalışını ifade etmez; araştırma seferlerinin sıklığı ve dijital saha kayıtlarının yaygınlaşması kayıt sayılarını belirgin biçimde etkiler.`;
+GBIF veri tabanındaki yıllık gözlem dalgalanmaları doğrudan canlı popülasyonunu ifade etmez; araştırma seferlerinin yoğunluğu, saha metodolojisi ve vatandaş bilimi dijitalleşmesi kayıt sayılarını doğrudan etkiler.`;
 
-    addStep('Analitik Sentez Raporu Tamamlandı', 'Tüm parametreler ve bölgesel yoğunluklar hesaplandı.');
+  addStep('Analitik Sentez Raporu Tamamlandı', 'Tüm parametreler ve bölgesel yoğunluklar GBIF motoruyla hesaplandı.');
 
-    res.json({
-      success: true,
-      report: fallbackReport,
-      steps,
-      analysis: primaryAnalysis,
-      speciesName: name,
-      agentMode: 'deterministic_gbif_engine',
-    });
-  } catch (err: any) {
-    console.error('Agent research error:', err);
-    res.status(500).json({
-      error: 'Araştırma yürütülürken bir hata oluştu: ' + (err.message || 'Bilinmeyen hata'),
-    });
-  }
+  res.json({
+    success: true,
+    report: deterministicReport,
+    steps,
+    analysis: primaryAnalysis,
+    speciesName: name,
+    parameters: params,
+    agentMode: 'deterministic_gbif',
+  });
 });
 
 // Start Full-Stack Server
@@ -355,6 +340,13 @@ async function startServer() {
   });
 }
 
-startServer().catch((err) => {
-  console.error('Server başlatılamadı:', err);
-});
+// Export Express app for Vercel serverless runtime
+export default app;
+
+// Only start standalone HTTP server when not in serverless Vercel environment
+if (!process.env.VERCEL) {
+  startServer().catch((err) => {
+    console.error('Server başlatılamadı:', err);
+  });
+}
+

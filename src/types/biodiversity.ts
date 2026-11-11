@@ -83,7 +83,34 @@ export interface SpeciesAnalysis {
   yearlyStats: YearlyStat[];
   regionalStats: RegionStat[];
   occurrences: GBIFOccurrence[];
+  appliedFilters?: {
+    countryCode?: string;
+    countryName?: string;
+    startYear?: number;
+    endYear?: number;
+    taxonKey?: number;
+  };
   queriedAt: string;
+}
+
+export interface ResearchParameters {
+  speciesName: string;
+  scientificName: string;
+  country: string;
+  countryCode: string;
+  startYear?: number;
+  endYear?: number;
+  dateRangeText: string;
+  analysisType: string;
+  geographicScope: string;
+}
+
+export interface FetchSpeciesOptions {
+  countryCode?: string;
+  startYear?: number;
+  endYear?: number;
+  limit?: number;
+  fetchExtraPages?: boolean;
 }
 
 export interface DiscoverySpecimen {

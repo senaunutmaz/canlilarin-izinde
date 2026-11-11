@@ -26,8 +26,11 @@ export const SpeciesOverview: React.FC<SpeciesOverviewProps> = ({ analysis }) =>
         return { bg: 'bg-yellow-950/80 border-yellow-600/50 text-yellow-300', dot: 'bg-yellow-500', name: 'Tehdite Yakın (NT)' };
       case 'LC':
         return { bg: 'bg-emerald-950/80 border-emerald-600/50 text-emerald-300', dot: 'bg-emerald-500', name: 'Asgari Endişe (LC)' };
+      case 'DD':
+        return { bg: 'bg-purple-950/80 border-purple-600/50 text-purple-300', dot: 'bg-purple-500', name: 'Veri Yetersiz (Data Deficient - DD)' };
+      case 'NE':
       default:
-        return { bg: 'bg-slate-900 border-slate-700 text-slate-300', dot: 'bg-slate-500', name: 'Veri Yetersiz / Değerlendirilmemiş (DD)' };
+        return { bg: 'bg-slate-900 border-slate-700 text-slate-300', dot: 'bg-slate-500', name: 'Değerlendirilmemiş (Not Evaluated - NE)' };
     }
   };
 
@@ -131,9 +134,16 @@ export const SpeciesOverview: React.FC<SpeciesOverviewProps> = ({ analysis }) =>
             </div>
 
             {species.englishName && (
-              <p className="text-sm text-emerald-200/60 mb-4">
+              <p className="text-sm text-emerald-200/60 mb-2">
                 İngilizce: <span className="font-medium text-emerald-100">{species.englishName}</span>
               </p>
+            )}
+
+            {species.iucnSource && (
+              <div className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-300/70 mb-3 bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-900/40 w-fit">
+                <Award className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Statü Kaynağı: {species.iucnSource}</span>
+              </div>
             )}
 
             {species.summary && (

@@ -14,6 +14,77 @@ import {
   FetchSpeciesOptions 
 } from '../types/biodiversity';
 
+// In-Memory TTL Önbellek Sistemi (GBIF ve iNaturalist verilerini 15 dakika boyunca saklar)
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+const GBIF_CACHE = new Map<string, CacheEntry<any>>();
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 dakika
+
+export function getCached<T>(key: string): T | null {
+  const entry = GBIF_CACHE.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    GBIF_CACHE.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+export function setCached<T>(key: string, data: T, ttlMs = CACHE_TTL_MS): void {
+  // Bellek şişmesini önlemek için en fazla 200 kayıt tut
+  if (GBIF_CACHE.size > 200) {
+    const oldestKey = GBIF_CACHE.keys().next().value;
+    if (oldestKey) GBIF_CACHE.delete(oldestKey);
+  }
+  GBIF_CACHE.set(key, { data, expiresAt: Date.now() + ttlMs });
+}
+
+/**
+ * Zaman aşımı (Timeout) ve otomatik yeniden deneme (Retry) mekanizmalı fetch sarmalayıcısı
+ */
+export async function fetchWithRetry(
+  url: string,
+  init?: RequestInit,
+  maxRetries = 2,
+  timeoutMs = 8000
+): Promise<Response> {
+  let attempt = 0;
+  let lastError: any = null;
+
+  while (attempt <= maxRetries) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok && response.status >= 500 && attempt < maxRetries) {
+        attempt++;
+        await new Promise((r) => setTimeout(r, 350 * attempt));
+        continue;
+      }
+      return response;
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      lastError = err;
+      if (attempt < maxRetries) {
+        attempt++;
+        await new Promise((r) => setTimeout(r, 350 * attempt));
+      } else {
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error(`Ağ isteği başarısız: ${url}`);
+}
+
 // Yaygın Türkçe canlı isimleri ve bilimsel ad eşleşmeleri
 export const COMMON_TURKISH_SPECIES: Record<string, { scientificName: string; turkishName: string; iucn: string; category: string }> = {
   'bozayı': { scientificName: 'Ursus arctos', turkishName: 'Bozayı', iucn: 'LC', category: 'Memeliler' },
@@ -408,6 +479,45 @@ export function extractSpeciesAndParameters(
   };
 }
 
+/**
+ * Kullanıcı metninde iki farklı türün karşılaştırılmak istenip istenmediğini kontrol eder
+ */
+export function extractComparisonSpecies(
+  rawQuery: string
+): { isComparison: boolean; speciesA?: string; speciesB?: string } {
+  const text = (rawQuery || '').trim();
+  if (!text) return { isComparison: false };
+
+  const isCompareIntent = /\b(karşılaştır|kıyasla|kıyas|farkı|farkları|vs|versus)\b/iu.test(text) ||
+    /\b(ile|ve)\b/iu.test(text);
+
+  if (!isCompareIntent) return { isComparison: false };
+
+  const matchedSpecies: { scientificName: string; turkishName: string }[] = [];
+
+  for (const rule of SPECIES_RECOGNITION_RULES) {
+    for (const pattern of rule.patterns) {
+      if (pattern.test(text)) {
+        if (!matchedSpecies.some(m => m.scientificName === rule.scientificName)) {
+          matchedSpecies.push({ scientificName: rule.scientificName, turkishName: rule.turkishName });
+        }
+        break;
+      }
+    }
+    if (matchedSpecies.length >= 2) break;
+  }
+
+  if (matchedSpecies.length >= 2) {
+    return {
+      isComparison: true,
+      speciesA: matchedSpecies[0].scientificName,
+      speciesB: matchedSpecies[1].scientificName,
+    };
+  }
+
+  return { isComparison: false };
+}
+
 
 // Keşif alanı için 6 ana kategoride seçilmiş türler
 export const DISCOVERY_SPECIMENS: DiscoverySpecimen[] = [
@@ -660,20 +770,27 @@ export const DISCOVERY_SPECIMENS: DiscoverySpecimen[] = [
  */
 export async function matchSpecies(query: string): Promise<SpeciesInfo> {
   const cleanQuery = query.trim().toLowerCase();
+  const cacheKey = `species-match:${cleanQuery}`;
+  const cached = getCached<SpeciesInfo>(cacheKey);
+  if (cached) return cached;
   
   // Önce Türkçe eşleşmelerimize bakalım
   let targetScientific = query.trim();
   let predefinedTurkishName = '';
-  let predefinedIucn = 'LC';
+  let predefinedIucn: string | undefined = undefined;
+  let iucnSource = 'Resmi IUCN değerlendirme kaydı bulunamadı (NE)';
+  let iucnVerified = false;
 
   if (COMMON_TURKISH_SPECIES[cleanQuery]) {
     targetScientific = COMMON_TURKISH_SPECIES[cleanQuery].scientificName;
     predefinedTurkishName = COMMON_TURKISH_SPECIES[cleanQuery].turkishName;
     predefinedIucn = COMMON_TURKISH_SPECIES[cleanQuery].iucn;
+    iucnSource = 'IUCN Kırmızı Liste / Canlı Atlası Referans Envanteri';
+    iucnVerified = true;
   }
 
   try {
-    const gbifRes = await fetch(`https://api.gbif.org/v1/species/match?name=${encodeURIComponent(targetScientific)}`);
+    const gbifRes = await fetchWithRetry(`https://api.gbif.org/v1/species/match?name=${encodeURIComponent(targetScientific)}`);
     const gbifData = await gbifRes.json();
 
     const scientificName = gbifData.scientificName || gbifData.canonicalName || targetScientific;
@@ -682,7 +799,26 @@ export async function matchSpecies(query: string): Promise<SpeciesInfo> {
     // iNaturalist üzerinden fotoğraf ve Türkçe isim desteği
     const inatInfo = await fetchInatTaxon(canonicalName || scientificName);
 
-    return {
+    let finalIucn = predefinedIucn;
+    let finalIucnCategory = getIucnLabel(predefinedIucn);
+
+    if (inatInfo?.iucnStatus) {
+      finalIucn = inatInfo.iucnStatus;
+      finalIucnCategory = inatInfo.iucnCategoryName || getIucnLabel(finalIucn);
+      iucnSource = 'iNaturalist Taksonomi & IUCN Koruma Ağı';
+      iucnVerified = true;
+    } else if (predefinedIucn) {
+      finalIucn = predefinedIucn;
+      finalIucnCategory = getIucnLabel(predefinedIucn);
+    } else {
+      // Kesin kural: Veri yoksa ASLA otomatik 'LC' atama, 'NE' (Not Evaluated) göster!
+      finalIucn = 'NE';
+      finalIucnCategory = 'Değerlendirilmemiş (Not Evaluated)';
+      iucnSource = 'Resmi IUCN değerlendirme kaydı bulunamadı (NE)';
+      iucnVerified = false;
+    }
+
+    const result: SpeciesInfo = {
       usageKey: gbifData.usageKey,
       scientificName: scientificName,
       canonicalName: canonicalName,
@@ -698,25 +834,33 @@ export async function matchSpecies(query: string): Promise<SpeciesInfo> {
       taxonomicStatus: gbifData.status || 'ACCEPTED',
       photoUrl: inatInfo?.photoUrl,
       photoAttribution: inatInfo?.photoAttribution,
-      iucnStatus: inatInfo?.iucnStatus || predefinedIucn || 'LC',
-      iucnCategoryName: inatInfo?.iucnCategoryName || getIucnLabel(inatInfo?.iucnStatus || predefinedIucn),
+      iucnStatus: finalIucn,
+      iucnCategoryName: finalIucnCategory,
+      iucnSource,
+      iucnVerified,
       summary: inatInfo?.summary,
       inaturalistUrl: inatInfo?.inatUrl,
       gbifUrl: gbifData.usageKey ? `https://www.gbif.org/species/${gbifData.usageKey}` : `https://www.gbif.org/species/search?q=${encodeURIComponent(canonicalName)}`
     };
+
+    setCached(cacheKey, result);
+    return result;
   } catch (error) {
     console.error('GBIF species match error:', error);
-    // Güvenli yerel yapı
-    return {
+    const fallbackIucn = predefinedIucn || 'NE';
+    const result: SpeciesInfo = {
       scientificName: targetScientific,
       canonicalName: targetScientific,
       turkishName: predefinedTurkishName || targetScientific,
       kingdom: 'Animalia',
       rank: 'SPECIES',
-      iucnStatus: predefinedIucn,
-      iucnCategoryName: getIucnLabel(predefinedIucn),
+      iucnStatus: fallbackIucn,
+      iucnCategoryName: getIucnLabel(fallbackIucn),
+      iucnSource: predefinedIucn ? 'Canlı Atlası Referans Envanteri' : 'Değerlendirilmemiş (Ağ Hatası / Çevrimdışı)',
+      iucnVerified: Boolean(predefinedIucn),
       gbifUrl: `https://www.gbif.org/species/search?q=${encodeURIComponent(targetScientific)}`
     };
+    return result;
   }
 }
 
@@ -725,16 +869,17 @@ export async function matchSpecies(query: string): Promise<SpeciesInfo> {
  */
 async function fetchInatTaxon(scientificName: string) {
   try {
-    const res = await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(scientificName)}&locale=tr`);
+    const res = await fetchWithRetry(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(scientificName)}&locale=tr`, undefined, 1, 6000);
     const data = await res.json();
     if (data.results && data.results.length > 0) {
       const taxon = data.results[0];
       
-      let iucnCode = 'LC';
-      let iucnLabel = 'Asgari Endişe (Least Concern)';
+      let iucnCode: string | undefined;
+      let iucnLabel: string | undefined;
 
-      if (taxon.conservation_status) {
-        iucnCode = taxon.conservation_status.status || 'LC';
+      // Yalnızca iNaturalist resmi koruma statüsü tanımlanmışsa ayıkla
+      if (taxon.conservation_status && taxon.conservation_status.status) {
+        iucnCode = String(taxon.conservation_status.status).toUpperCase();
         iucnLabel = taxon.conservation_status.status_name || getIucnLabel(iucnCode);
       }
 
@@ -762,7 +907,7 @@ async function fetchInatTaxon(scientificName: string) {
 }
 
 /**
- * IUCN kodundan anlaşılır Türkçe etiket üretme
+ * IUCN kodundan anlaşılır Türkçe etiket üretme (NE ve DD ayrımı korunmuştur)
  */
 export function getIucnLabel(code?: string): string {
   switch (code?.toUpperCase()) {
@@ -775,7 +920,7 @@ export function getIucnLabel(code?: string): string {
     case 'LC': return 'Asgari Endişe (Least Concern)';
     case 'DD': return 'Veri Yetersiz (Data Deficient)';
     case 'NE': return 'Değerlendirilmemiş (Not Evaluated)';
-    default: return 'Bilinmiyor / İnceleniyor';
+    default: return 'Değerlendirilmemiş (Not Evaluated)';
   }
 }
 
@@ -798,6 +943,10 @@ export async function fetchSpeciesAnalysis(
   const endYear = options.endYear;
   const limit = options.limit || 300;
   const fetchExtraPages = options.fetchExtraPages ?? true;
+
+  const cacheKey = `analysis:${scientificName.toLowerCase()}:${countryCode}:${startYear || ''}:${endYear || ''}:${limit}`;
+  const cachedAnalysis = getCached<SpeciesAnalysis>(cacheKey);
+  if (cachedAnalysis) return cachedAnalysis;
 
   // 1. Türün taksonomik kimlik ve taxonKey (usageKey) bilgilerini çöz
   const species = await matchSpecies(scientificName);
@@ -829,24 +978,38 @@ export async function fetchSpeciesAnalysis(
   let unlocatedCount = 0;
 
   try {
-    const res = await fetch(gbifUrl);
+    const res = await fetchWithRetry(gbifUrl);
     const data = await res.json();
 
     totalRecords = typeof data.count === 'number' ? data.count : 0;
 
-    // Sayfalama (Pagination): Eğer toplam kayıt 300'den fazlaysa, harita ve detay için 2. sayfayı da al
+    // Ölçeklenebilir Sayfalama (Pagination): 600 kayıt sınırlaması kaldırıldı;
+    // Eğer toplam kayıt limitten fazlaysa, ek sayfaları eş zamanlı (concurrent) olarak çek
     if (totalRecords > limit && fetchExtraPages) {
       try {
-        const page2Offset = limit;
-        const page2Limit = Math.min(300, totalRecords - limit);
-        const page2Url = `https://api.gbif.org/v1/occurrence/search?${taxonParam}${countryParam}${yearParam}&offset=${page2Offset}&limit=${page2Limit}`;
-        const res2 = await fetch(page2Url);
-        const data2 = await res2.json();
-        if (data2.results && Array.isArray(data2.results)) {
-          data.results = [...(data.results || []), ...data2.results];
+        const maxRecordsToFetch = Math.min(1200, totalRecords);
+        const pagePromises: Promise<any>[] = [];
+        for (let offset = limit; offset < maxRecordsToFetch; offset += limit) {
+          const batchLimit = Math.min(limit, maxRecordsToFetch - offset);
+          const pageUrl = `https://api.gbif.org/v1/occurrence/search?${taxonParam}${countryParam}${yearParam}&offset=${offset}&limit=${batchLimit}`;
+          pagePromises.push(
+            fetchWithRetry(pageUrl)
+              .then(r => r.json())
+              .catch(err => {
+                console.warn(`GBIF pagination offset ${offset} failed:`, err);
+                return { results: [] };
+              })
+          );
         }
-      } catch (page2Err) {
-        console.warn('GBIF page 2 fetch failed:', page2Err);
+
+        const pageResults = await Promise.all(pagePromises);
+        for (const pr of pageResults) {
+          if (pr.results && Array.isArray(pr.results)) {
+            data.results = [...(data.results || []), ...pr.results];
+          }
+        }
+      } catch (pageErr) {
+        console.warn('GBIF scalable pagination error:', pageErr);
       }
     }
 
@@ -973,7 +1136,7 @@ export async function fetchSpeciesAnalysis(
     lowestYear = sortedByCount[sortedByCount.length - 1];
   }
 
-  return {
+  const analysisResult: SpeciesAnalysis = {
     species,
     countryCode,
     countryName: countryCode === 'TR' ? 'Türkiye' : 'Tüm Dünya',
@@ -999,6 +1162,9 @@ export async function fetchSpeciesAnalysis(
     },
     queriedAt: new Date().toISOString()
   };
+
+  setCached(cacheKey, analysisResult);
+  return analysisResult;
 }
 
 /**

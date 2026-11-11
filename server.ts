@@ -8,6 +8,7 @@ import {
   fetchSpeciesAnalysis, 
   matchSpecies, 
   extractSpeciesAndParameters,
+  extractComparisonSpecies,
   COMMON_TURKISH_SPECIES 
 } from './src/services/gbif.ts';
 import { SpeciesAnalysis, ResearchParameters } from './src/types/biodiversity.ts';
@@ -30,7 +31,7 @@ export interface AgentExecutionStep {
   timestamp: string;
 }
 
-// 1. Tool Declaration for Gemini Function Calling
+// 1. Tool Declarations for Gemini Multi-Tool Function Calling
 const fetchGbifDataDeclaration: FunctionDeclaration = {
   name: 'fetchGbifSpeciesData',
   description: 'Fetches verified scientific occurrence records, observation trends, GPS coordinates, and regional provincial stats from the Global Biodiversity Information Facility (GBIF) API for a species.',
@@ -55,6 +56,44 @@ const fetchGbifDataDeclaration: FunctionDeclaration = {
       },
     },
     required: ['scientificOrCommonName'],
+  },
+};
+
+const searchSpeciesTaxonomyDeclaration: FunctionDeclaration = {
+  name: 'searchSpeciesTaxonomy',
+  description: 'Matches and validates a common or scientific species name against the GBIF taxonomy and iNaturalist databases, returning official taxonomy, kingdom, family, and IUCN Red List conservation status.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      speciesName: {
+        type: Type.STRING,
+        description: 'Common name (Turkish/English) or scientific binomial name of the species to search.',
+      },
+    },
+    required: ['speciesName'],
+  },
+};
+
+const compareTwoSpeciesDeclaration: FunctionDeclaration = {
+  name: 'compareTwoSpecies',
+  description: 'Performs side-by-side comparative analytics of two species (e.g. Bozayı and Bozkurt) comparing total GBIF observations, GPS mapped records, and regional centers.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      speciesA: {
+        type: Type.STRING,
+        description: 'Scientific or common name of the first species.',
+      },
+      speciesB: {
+        type: Type.STRING,
+        description: 'Scientific or common name of the second species.',
+      },
+      countryCode: {
+        type: Type.STRING,
+        description: 'Two-letter ISO country code (e.g. "TR").',
+      },
+    },
+    required: ['speciesA', 'speciesB'],
   },
 };
 
@@ -108,7 +147,9 @@ app.post('/api/agent/research', async (req: Request, res: Response): Promise<voi
   );
 
   // Adım 2: GBIF'ten gerçek verileri çek
+  // Adım 2: GBIF'ten gerçek verileri çek
   let primaryAnalysis: SpeciesAnalysis | null = null;
+  let secondaryAnalysis: SpeciesAnalysis | null = null;
 
   try {
     addStep(
@@ -128,6 +169,30 @@ app.post('/api/agent/research', async (req: Request, res: Response): Promise<voi
       'GBIF Açık Bilim Verileri Alındı',
       `Toplam ${primaryAnalysis.totalRecords} kayıt, ${primaryAnalysis.mappedRecordsCount} doğrulanmış GPS koordinatı, ${primaryAnalysis.regionalStats.length} il verisi arşivlendi.`
     );
+
+    // İki tür karşılaştırma isteği kontrolü
+    const compCheck = extractComparisonSpecies(userQuery);
+    if (compCheck.isComparison && compCheck.speciesB && compCheck.speciesB !== params.scientificName) {
+      try {
+        addStep(
+          'Karşılaştırmalı Tür Analizi Başlatıldı',
+          `2. Tür: ${compCheck.speciesB} için GBIF kayıtları getiriliyor...`,
+          'in_progress'
+        );
+        secondaryAnalysis = await fetchSpeciesAnalysis(compCheck.speciesB, {
+          countryCode: params.countryCode,
+          startYear: params.startYear,
+          endYear: params.endYear,
+          fetchExtraPages: true,
+        });
+        addStep(
+          '2. Tür Verileri Hazırlandı',
+          `${secondaryAnalysis.species.turkishName || compCheck.speciesB}: ${secondaryAnalysis.totalRecords} kayıt, ${secondaryAnalysis.mappedRecordsCount} GPS koordinatı.`
+        );
+      } catch (secErr) {
+        console.warn('İkinci tür çekilemedi:', secErr);
+      }
+    }
   } catch (gbifErr: any) {
     console.error('GBIF fetch error:', gbifErr);
     addStep('GBIF Bağlantı Hatası', 'GBIF API sunucularına bağlanırken bir sorun oluştu.', 'failed');
@@ -173,6 +238,7 @@ GBIF (Global Biodiversity Information Facility) açık arşivinde belirtilen fil
       report: zeroRecordReport,
       steps,
       analysis: primaryAnalysis,
+      secondaryAnalysis: null,
       speciesName: params.speciesName,
       parameters: params,
       agentMode: 'gbif_verified',
@@ -207,7 +273,8 @@ KURALLAR:
    - **📍 3. Coğrafi Yayılım & Bölgesel Sıcak Noktalar** (En yoğun kayıt bulunan iller/bölgeler ve yaşam alanları)
    - **🛡️ 4. Koruma Statüsü & Tehdit Değerlendirmesi** (IUCN durumu, ekolojik tehditler)
    - **📌 5. Bilimsel Metodoloji Notu & Araştırmacı Tavsiyeleri**
-4. Kısa, teknik ve güvenilir ol. Kaynak olarak GBIF ve iNaturalist'e atıfta bulun.`;
+4. Eğer kullanıcı iki türü kıyaslamışsa raporuna karşılaştırma tablosu ekle.
+5. Kısa, teknik ve güvenilir ol. Kaynak olarak GBIF ve iNaturalist'e atıfta bulun.`;
 
       // Helper to execute with timeout
       const withTimeout = <T>(promise: Promise<T>, ms = 12000): Promise<T> => {
@@ -219,30 +286,128 @@ KURALLAR:
 
       const topProvinces = primaryAnalysis.regionalStats.slice(0, 5).map(r => `${r.region} (%${r.percentage.toFixed(1)})`).join(', ');
 
-      const promptForGemini = `Araştırma Görevi: ${userQuery}
+      let promptForGemini = `Araştırma Görevi: ${userQuery}
 Parametreler:
 - Canlı Türü: ${params.speciesName} (${params.scientificName})
 - Coğrafya: ${primaryAnalysis.countryName}
 - Tarih Aralığı: ${params.dateRangeText}
 
-GBIF Gerçek Verileri:
+GBIF Gerçek Verileri (1. Tür):
 - Toplam Doğrulanmış Kayıt: ${primaryAnalysis.totalRecords}
 - GPS Koordinatlı Kayıt Sayısı: ${primaryAnalysis.mappedRecordsCount}
 - Konum Belirtilmemiş Kayıt Sayısı: ${primaryAnalysis.unlocatedCount}
 - En Çok Gözlem Yapılan Zirve Yılı: ${primaryAnalysis.peakYear ? `${primaryAnalysis.peakYear.year} (${primaryAnalysis.peakYear.count} kayıt)` : 'Belirtilmemiş'}
 - En Düşük Gözlem Yılı: ${primaryAnalysis.lowestYear ? `${primaryAnalysis.lowestYear.year} (${primaryAnalysis.lowestYear.count} kayıt)` : 'Belirtilmemiş'}
 - En Çok Kayıt Bulunan İller: ${topProvinces || 'Bölgesel veri kısıtlı'}
-- IUCN Koruma Durumu: ${primaryAnalysis.species.iucnStatus || 'LC'} (${primaryAnalysis.species.iucnCategoryName || 'Değerlendirilmiş'})
+- IUCN Koruma Durumu: ${primaryAnalysis.species.iucnStatus || 'NE'} (${primaryAnalysis.species.iucnCategoryName || 'Değerlendirilmemiş'})`;
 
-Lütfen bu gerçek veriler ışığında bilimsel araştırma raporunu oluştur.`;
+      if (secondaryAnalysis) {
+        const secProvinces = secondaryAnalysis.regionalStats.slice(0, 5).map(r => `${r.region} (%${r.percentage.toFixed(1)})`).join(', ');
+        promptForGemini += `\n\nGBIF Gerçek Verileri (2. Tür Karşılaştırma):
+- Tür: ${secondaryAnalysis.species.turkishName || secondaryAnalysis.species.canonicalName} (${secondaryAnalysis.species.scientificName})
+- Toplam Doğrulanmış Kayıt: ${secondaryAnalysis.totalRecords}
+- GPS Koordinatlı Kayıt Sayısı: ${secondaryAnalysis.mappedRecordsCount}
+- En Çok Gözlem Yapılan Zirve Yılı: ${secondaryAnalysis.peakYear ? `${secondaryAnalysis.peakYear.year} (${secondaryAnalysis.peakYear.count} kayıt)` : 'Belirtilmemiş'}
+- En Çok Kayıt Bulunan İller: ${secProvinces || 'Bölgesel veri kısıtlı'}
+- IUCN Durumu: ${secondaryAnalysis.species.iucnStatus || 'NE'} (${secondaryAnalysis.species.iucnCategoryName || 'Değerlendirilmemiş'})`;
+      }
+
+      promptForGemini += `\n\nLütfen bu gerçek veriler ışığında bilimsel araştırma raporunu oluştur.`;
 
       const aiResponse = await withTimeout(
         ai.models.generateContent({
           model: 'gemini-2.5-flash',
           contents: [{ role: 'user', parts: [{ text: promptForGemini }] }],
-          config: { systemInstruction },
+          config: { 
+            systemInstruction,
+            tools: [{ 
+              functionDeclarations: [
+                fetchGbifDataDeclaration, 
+                searchSpeciesTaxonomyDeclaration, 
+                compareTwoSpeciesDeclaration
+              ] 
+            }],
+          },
         })
       );
+
+      // Check if function calls were triggered
+      if (aiResponse.functionCalls && aiResponse.functionCalls.length > 0) {
+        addStep('Yapay Zekâ Araç Çağrısı Gerçekleştirildi', `${aiResponse.functionCalls.map(f => f.name).join(', ')} araçları çalıştırıldı.`);
+        
+        const functionResponses = await Promise.all(
+          aiResponse.functionCalls.map(async (call) => {
+            let resData: any = {};
+            if (call.name === 'searchSpeciesTaxonomy') {
+              const spName = (call.args as any)?.speciesName || params.scientificName;
+              resData = await matchSpecies(spName);
+            } else if (call.name === 'fetchGbifSpeciesData') {
+              const spName = (call.args as any)?.scientificOrCommonName || params.scientificName;
+              resData = await fetchSpeciesAnalysis(spName, {
+                countryCode: (call.args as any)?.countryCode || params.countryCode,
+                startYear: (call.args as any)?.startYear,
+                endYear: (call.args as any)?.endYear,
+              });
+            } else if (call.name === 'compareTwoSpecies') {
+              const spA = (call.args as any)?.speciesA || params.scientificName;
+              const spB = (call.args as any)?.speciesB || 'Canis lupus';
+              const [dA, dB] = await Promise.all([
+                fetchSpeciesAnalysis(spA, { countryCode: params.countryCode }),
+                fetchSpeciesAnalysis(spB, { countryCode: params.countryCode }),
+              ]);
+              resData = {
+                speciesA: { name: spA, records: dA.totalRecords, mapped: dA.mappedRecordsCount },
+                speciesB: { name: spB, records: dB.totalRecords, mapped: dB.mappedRecordsCount },
+              };
+            }
+            return {
+              name: call.name,
+              response: { result: resData },
+            };
+          })
+        );
+
+        const candidateContent = aiResponse.candidates?.[0]?.content || {
+          role: 'model',
+          parts: [{ text: '' }],
+        };
+
+        // Turn 2
+        const secondTurn = await withTimeout(
+          ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+              { role: 'user', parts: [{ text: promptForGemini }] },
+              candidateContent,
+              {
+                role: 'user',
+                parts: functionResponses.map(fr => ({
+                  functionResponse: {
+                    name: fr.name,
+                    response: fr.response,
+                  },
+                })),
+              },
+            ],
+            config: { systemInstruction },
+          })
+        );
+
+        if (secondTurn.text && secondTurn.text.trim().length > 100) {
+          addStep('Akademik Sentez Tamamlandı', 'Gemini 2.5 Flash çok adımlı fonksiyon çağırma (Function Calling) ile raporu derledi.');
+          res.json({
+            success: true,
+            report: secondTurn.text,
+            steps,
+            analysis: primaryAnalysis,
+            secondaryAnalysis,
+            speciesName: params.speciesName,
+            parameters: params,
+            agentMode: 'gemini_function_calling',
+          });
+          return;
+        }
+      }
 
       const aiText = aiResponse.text;
       if (aiText && aiText.trim().length > 100) {
@@ -252,6 +417,7 @@ Lütfen bu gerçek veriler ışığında bilimsel araştırma raporunu oluştur.
           report: aiText,
           steps,
           analysis: primaryAnalysis,
+          secondaryAnalysis,
           speciesName: params.speciesName,
           parameters: params,
           agentMode: 'gemini_function_calling',
@@ -274,11 +440,12 @@ Lütfen bu gerçek veriler ışığında bilimsel araştırma raporunu oluştur.
     ? `${primaryAnalysis.peakYear.year} yılı (${primaryAnalysis.peakYear.count} gözlem)` 
     : 'Veri yetersiz';
 
-  const deterministicReport = `### 🔬 1. Yönetici Özeti & Tür Kimliği
+  let deterministicReport = `### 🔬 1. Yönetici Özeti & Tür Kimliği
 - **Türkçe Adı:** ${name}
 - **Bilimsel Adı:** *${s.scientificName}*
 - **Sınıflandırma:** ${s.kingdom || 'Animalia'} › ${s.phylum || 'Chordata'} › ${s.family || 'Familya'}
-- **IUCN Kırmızı Liste Durumu:** **${s.iucnStatus || 'LC'}** (${s.iucnCategoryName || 'Değerlendirilmiş'})
+- **IUCN Kırmızı Liste Durumu:** **${s.iucnStatus || 'NE'}** (${s.iucnCategoryName || 'Değerlendirilmemiş'})
+- **Veri Kaynağı:** GBIF Açık Bilim Ağı & iNaturalist Taksonomi Arşivi
 
 ---
 
@@ -293,16 +460,32 @@ Lütfen bu gerçek veriler ışığında bilimsel araştırma raporunu oluştur.
 
 ### 📍 3. Coğrafi Yayılım & Bölgesel Sıcak Noktalar
 ${primaryAnalysis.countryName} genelinde en fazla gözlem kaydı bulunan ilk 5 il/bölge:
-${topRegionsText || 'Bölgesel veri bulunamadı.'}
+${topRegionsText || 'Bölgesel veri bulunamadı.'}`;
+
+  if (secondaryAnalysis) {
+    const s2 = secondaryAnalysis.species;
+    const name2 = s2.turkishName || s2.canonicalName;
+    const topRegions2 = secondaryAnalysis.regionalStats.slice(0, 3)
+      .map((r, i) => `${i + 1}. ${r.region} (${r.count} kayıt)`)
+      .join(', ');
+
+    deterministicReport += `\n\n---
+
+### ⚖️ 4. Karşılaştırmalı Biyoçeşitlilik Özeti (${name} vs ${name2})
+- **Toplam Kayıt Karşılaştırması:** ${name}: **${primaryAnalysis.totalRecords} adet** | ${name2}: **${secondaryAnalysis.totalRecords} adet**
+- **GPS Koordinatlı Kayıt:** ${name}: ${primaryAnalysis.mappedRecordsCount} nokta | ${name2}: ${secondaryAnalysis.mappedRecordsCount} nokta
+- **IUCN Durumu:** ${name}: ${s.iucnStatus || 'NE'} | ${name2}: ${s2.iucnStatus || 'NE'}
+- **Öne Çıkan İller (${name2}):** ${topRegions2 || 'Veri kısıtlı'}`;
+  }
+
+  deterministicReport += `\n\n---
+
+### 🛡️ ${secondaryAnalysis ? '5' : '4'}. Koruma Statüsü & Ekolojik Değerlendirme
+*${s.scientificName}* türü, habitat bütünlüğü ve ekolojik koruma koridorları açısından izlenmesi gereken kilit bir taksondur. Doğrulanmış GPS noktaları etkileşimli harita üzerinde incelenebilir.
 
 ---
 
-### 🛡️ 4. Koruma Statüsü & Ekolojik Değerlendirme
-*${s.scientificName}* türü, habitat bütünlüğü ve ekolojik koruma koridorları açısından izlenmesi gereken kilit bir taksondur. Doğrulanmış GPS noktaları harita üzerinde incelenebilir.
-
----
-
-### 📌 5. Bilimsel Metodoloji Notu
+### 📌 ${secondaryAnalysis ? '6' : '5'}. Bilimsel Metodoloji Notu
 GBIF veri tabanındaki yıllık gözlem dalgalanmaları doğrudan canlı popülasyonunu ifade etmez; araştırma seferlerinin yoğunluğu, saha metodolojisi ve vatandaş bilimi dijitalleşmesi kayıt sayılarını doğrudan etkiler.`;
 
   addStep('Analitik Sentez Raporu Tamamlandı', 'Tüm parametreler ve bölgesel yoğunluklar GBIF motoruyla hesaplandı.');
@@ -312,10 +495,33 @@ GBIF veri tabanındaki yıllık gözlem dalgalanmaları doğrudan canlı popüla
     report: deterministicReport,
     steps,
     analysis: primaryAnalysis,
+    secondaryAnalysis,
     speciesName: name,
     parameters: params,
     agentMode: 'deterministic_gbif',
   });
+});
+
+// Direct Side-by-Side Species Comparison Endpoint
+app.post('/api/species/compare', async (req: Request, res: Response): Promise<void> => {
+  const { speciesA, speciesB, country = 'TR' } = req.body;
+  if (!speciesA || !speciesB) {
+    res.status(400).json({ error: 'Lütfen karşılaştırılacak iki canlı türünü belirtin.' });
+    return;
+  }
+  try {
+    const [analysisA, analysisB] = await Promise.all([
+      fetchSpeciesAnalysis(speciesA, { countryCode: country }),
+      fetchSpeciesAnalysis(speciesB, { countryCode: country }),
+    ]);
+    res.json({
+      success: true,
+      speciesA: analysisA,
+      speciesB: analysisB,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Karşılaştırma verisi alınamadı.' });
+  }
 });
 
 // Start Full-Stack Server

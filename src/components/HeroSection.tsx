@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Globe2, Sparkles, MapPin, Database, ArrowRight } from 'lucide-react';
+import heroBg from './assets/images/canli_atlasi_hero_1794352926481.jpg';
 
 interface HeroSectionProps {
   onSearch: (query: string, country: string) => void;
@@ -37,7 +38,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearch, isLoading, a
       {/* Background Hero Image with Measured Gradient Scrim */}
       <div className="absolute inset-0 z-0">
         <img
-          src="/src/assets/images/canli_atlasi_hero_1794352926481.jpg"
+          src={heroBg}
           alt="Anadolu dağları ve sisli ormanlar"
           className="w-full h-full object-cover object-center opacity-35"
           referrerPolicy="no-referrer"

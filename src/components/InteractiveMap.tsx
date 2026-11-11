@@ -14,6 +14,30 @@ interface InteractiveMapProps {
 
 type TileTheme = 'topo' | 'dark' | 'satellite' | 'osm';
 
+/**
+ * XSS Koruması için HTML etiket ve özel karakter temizleyici
+ */
+function escapeHtml(str: string | undefined | null): string {
+  if (str === undefined || str === null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+const isValidCoordinate = (lat: unknown, lon: unknown): lat is number =>
+  typeof lat === 'number' &&
+  typeof lon === 'number' &&
+  !isNaN(lat) &&
+  !isNaN(lon) &&
+  lat >= -90 &&
+  lat <= 90 &&
+  lon >= -180 &&
+  lon <= 180 &&
+  !(lat === 0 && lon === 0);
+
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   occurrences,
   totalRecords,
@@ -30,29 +54,15 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [tileTheme, setTileTheme] = useState<TileTheme>('topo');
   const [selectedRecord, setSelectedRecord] = useState<GBIFOccurrence | null>(null);
 
-  // Filter valid geographic coordinates (-90..90, -180..180)
+  // Filter strictly valid geographic coordinates (-90..90, -180..180, non-zero)
   const validOccurrences = occurrences.filter(
     (o): o is GBIFOccurrence & { decimalLatitude: number; decimalLongitude: number } =>
-      typeof o.decimalLatitude === 'number' &&
-      typeof o.decimalLongitude === 'number' &&
-      !isNaN(o.decimalLatitude) &&
-      !isNaN(o.decimalLongitude) &&
-      o.decimalLatitude >= -90 &&
-      o.decimalLatitude <= 90 &&
-      o.decimalLongitude >= -180 &&
-      o.decimalLongitude <= 180
+      isValidCoordinate(o.decimalLatitude, o.decimalLongitude)
   );
 
   const validSecondary = (secondaryOccurrences || []).filter(
     (o): o is GBIFOccurrence & { decimalLatitude: number; decimalLongitude: number } =>
-      typeof o.decimalLatitude === 'number' &&
-      typeof o.decimalLongitude === 'number' &&
-      !isNaN(o.decimalLatitude) &&
-      !isNaN(o.decimalLongitude) &&
-      o.decimalLatitude >= -90 &&
-      o.decimalLatitude <= 90 &&
-      o.decimalLongitude >= -180 &&
-      o.decimalLongitude <= 180
+      isValidCoordinate(o.decimalLatitude, o.decimalLongitude)
   );
 
   // 1. Initialize Map Instance ONCE on mount
@@ -181,53 +191,47 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
     const bounds: [number, number][] = [];
 
-    // Custom DivIcon marker
-    const createMarkerIcon = (color: string, ringColor: string) => {
-      return L.divIcon({
-        className: 'custom-nature-pin',
-        html: `
-          <div style="position: relative; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">
-            <div style="position: absolute; width: 18px; height: 18px; border-radius: 50%; background-color: ${color}; opacity: 0.35;"></div>
-            <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${color}; border: 2px solid #ffffff; box-shadow: 0 0 10px ${ringColor}; z-index: 2;"></div>
-          </div>
-        `,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
-        popupAnchor: [0, -10],
-      });
-    };
-
-    const primaryIcon = createMarkerIcon('#10b981', 'rgba(16, 185, 129, 0.9)');
-    const secondaryIcon = createMarkerIcon('#f59e0b', 'rgba(245, 158, 11, 0.9)');
-
-    // Add Primary Species Markers
+    // Add Primary Species Markers (High Performance Circle Markers)
     validOccurrences.forEach((occ) => {
       bounds.push([occ.decimalLatitude, occ.decimalLongitude]);
+
+      const primaryName = escapeHtml(species.turkishName || species.canonicalName);
+      const primarySci = escapeHtml(species.scientificName);
+      const locText = escapeHtml(occ.stateProvince || occ.locality || 'Belirtilmemiş');
+      const yearText = escapeHtml(occ.year ? String(occ.year) : (occ.eventDate ? occ.eventDate.slice(0, 4) : 'Belirtilmemiş'));
+      const basisText = escapeHtml(occ.basisOfRecord || 'Saha Gözlemi');
+      const occKey = encodeURIComponent(String(occ.key));
 
       const popupHtml = `
         <div style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; line-height: 1.4;">
           <div style="font-weight: 700; color: #34d399; font-size: 13px; margin-bottom: 2px;">
-            ${species.turkishName || species.canonicalName}
+            ${primaryName}
           </div>
           <div style="font-style: italic; color: #a7f3d0; font-size: 11px; margin-bottom: 6px;">
-            ${species.scientificName}
+            ${primarySci}
           </div>
           <div style="border-top: 1px solid rgba(52, 211, 153, 0.25); padding-top: 6px; display: flex; flex-direction: column; gap: 3px;">
-            <div><strong>Konum:</strong> ${occ.stateProvince || occ.locality || 'Belirtilmemiş'}</div>
-            <div><strong>Yıl:</strong> ${occ.year || (occ.eventDate ? occ.eventDate.slice(0, 4) : 'Belirtilmemiş')}</div>
-            <div><strong>Kayıt Türü:</strong> ${occ.basisOfRecord || 'Saha Gözlemi'}</div>
+            <div><strong>Konum:</strong> ${locText}</div>
+            <div><strong>Yıl:</strong> ${yearText}</div>
+            <div><strong>Kayıt Türü:</strong> ${basisText}</div>
             <div style="font-family: monospace; font-size: 10px; color: #93c5fd; margin-top: 2px;">
               ${occ.decimalLatitude.toFixed(4)}°K, ${occ.decimalLongitude.toFixed(4)}°D
             </div>
           </div>
-          <a href="https://www.gbif.org/occurrence/${occ.key}" target="_blank" style="display: inline-block; margin-top: 6px; color: #6ee7b7; text-decoration: underline; font-size: 11px;">
+          <a href="https://www.gbif.org/occurrence/${occKey}" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin-top: 6px; color: #6ee7b7; text-decoration: underline; font-size: 11px;">
             GBIF Kayıt Ayrıntısı &rarr;
           </a>
         </div>
       `;
 
-      const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], { icon: primaryIcon })
-        .bindPopup(popupHtml);
+      const marker = L.circleMarker([occ.decimalLatitude, occ.decimalLongitude], {
+        radius: 6,
+        fillColor: '#10b981',
+        color: '#ffffff',
+        weight: 1.5,
+        opacity: 0.95,
+        fillOpacity: 0.85,
+      }).bindPopup(popupHtml);
 
       marker.on('click', () => setSelectedRecord(occ));
       layer.addLayer(marker);
@@ -238,30 +242,43 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       validSecondary.forEach((occ) => {
         bounds.push([occ.decimalLatitude, occ.decimalLongitude]);
 
+        const secName = escapeHtml(secondarySpecies.turkishName || secondarySpecies.canonicalName);
+        const secSci = escapeHtml(secondarySpecies.scientificName);
+        const locText = escapeHtml(occ.stateProvince || occ.locality || 'Belirtilmemiş');
+        const yearText = escapeHtml(occ.year ? String(occ.year) : (occ.eventDate ? occ.eventDate.slice(0, 4) : 'Belirtilmemiş'));
+        const basisText = escapeHtml(occ.basisOfRecord || 'Saha Gözlemi');
+        const occKey = encodeURIComponent(String(occ.key));
+
         const popupHtml = `
           <div style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; line-height: 1.4;">
             <div style="font-weight: 700; color: #fbbf24; font-size: 13px; margin-bottom: 2px;">
-              ${secondarySpecies.turkishName || secondarySpecies.canonicalName}
+              ${secName}
             </div>
             <div style="font-style: italic; color: #fde68a; font-size: 11px; margin-bottom: 6px;">
-              ${secondarySpecies.scientificName}
+              ${secSci}
             </div>
             <div style="border-top: 1px solid rgba(251, 191, 36, 0.25); padding-top: 6px; display: flex; flex-direction: column; gap: 3px;">
-              <div><strong>Konum:</strong> ${occ.stateProvince || occ.locality || 'Belirtilmemiş'}</div>
-              <div><strong>Yıl:</strong> ${occ.year || (occ.eventDate ? occ.eventDate.slice(0, 4) : 'Belirtilmemiş')}</div>
-              <div><strong>Kayıt Türü:</strong> ${occ.basisOfRecord || 'Saha Gözlemi'}</div>
+              <div><strong>Konum:</strong> ${locText}</div>
+              <div><strong>Yıl:</strong> ${yearText}</div>
+              <div><strong>Kayıt Türü:</strong> ${basisText}</div>
               <div style="font-family: monospace; font-size: 10px; color: #fef08a; margin-top: 2px;">
                 ${occ.decimalLatitude.toFixed(4)}°K, ${occ.decimalLongitude.toFixed(4)}°D
               </div>
             </div>
-            <a href="https://www.gbif.org/occurrence/${occ.key}" target="_blank" style="display: inline-block; margin-top: 6px; color: #fde68a; text-decoration: underline; font-size: 11px;">
+            <a href="https://www.gbif.org/occurrence/${occKey}" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin-top: 6px; color: #fde68a; text-decoration: underline; font-size: 11px;">
               GBIF Kayıt Ayrıntısı &rarr;
             </a>
           </div>
         `;
 
-        const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], { icon: secondaryIcon })
-          .bindPopup(popupHtml);
+        const marker = L.circleMarker([occ.decimalLatitude, occ.decimalLongitude], {
+          radius: 6,
+          fillColor: '#f59e0b',
+          color: '#ffffff',
+          weight: 1.5,
+          opacity: 0.95,
+          fillOpacity: 0.85,
+        }).bindPopup(popupHtml);
 
         marker.on('click', () => setSelectedRecord(occ));
         layer.addLayer(marker);

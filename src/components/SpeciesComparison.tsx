@@ -121,7 +121,7 @@ export const SpeciesComparison: React.FC<SpeciesComparisonProps> = ({
                 {p.species.scientificName}
               </p>
               <div className="mt-2 text-xs font-mono text-emerald-200/70">
-                IUCN: <strong className="text-emerald-300">{p.species.iucnStatus || 'LC'}</strong>
+                IUCN: <strong className="text-emerald-300">{p.species.iucnStatus || 'NE'}</strong>
               </div>
             </div>
           </div>
@@ -178,7 +178,7 @@ export const SpeciesComparison: React.FC<SpeciesComparisonProps> = ({
                     {s.species.scientificName}
                   </p>
                   <div className="mt-2 text-xs font-mono text-amber-200/70">
-                    IUCN: <strong className="text-amber-300">{s.species.iucnStatus || 'LC'}</strong>
+                    IUCN: <strong className="text-amber-300">{s.species.iucnStatus || 'NE'}</strong>
                   </div>
                 </div>
               </div>

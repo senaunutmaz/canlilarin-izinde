@@ -40,6 +40,7 @@ interface AgentResearchResponse {
   error?: string;
   steps: AgentExecutionStep[];
   analysis: SpeciesAnalysis | null;
+  secondaryAnalysis?: SpeciesAnalysis | null;
   speciesName: string | null;
   parameters?: ResearchParameters | null;
   agentMode: string;

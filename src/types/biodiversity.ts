@@ -21,6 +21,8 @@ export interface SpeciesInfo {
   photoAttribution?: string;
   iucnStatus?: 'CR' | 'EN' | 'VU' | 'NT' | 'LC' | 'DD' | 'NE' | string;
   iucnCategoryName?: string;
+  iucnSource?: string;
+  iucnVerified?: boolean;
   summary?: string;
   inaturalistUrl?: string;
   gbifUrl?: string;

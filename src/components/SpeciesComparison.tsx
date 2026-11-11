@@ -228,49 +228,164 @@ export const SpeciesComparison: React.FC<SpeciesComparisonProps> = ({
             </div>
           </h4>
 
-          {/* Combined Timeline Table */}
+          {/* Combined 9-Metric Scientific Comparison Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-xs font-mono">
               <thead>
                 <tr className="border-b border-emerald-900/60 text-emerald-400/70 text-left">
-                  <th className="py-2 pr-4">Metrik</th>
-                  <th className="py-2 px-4 text-emerald-300">{p.species.turkishName}</th>
-                  <th className="py-2 px-4 text-amber-300">{s.species.turkishName}</th>
-                  <th className="py-2 pl-4 text-right">Fark / Oran</th>
+                  <th className="py-2.5 pr-4 uppercase text-[11px] font-bold">13. Yönerge Metrikleri</th>
+                  <th className="py-2.5 px-4 text-emerald-300 font-bold text-sm">{p.species.turkishName || p.species.canonicalName}</th>
+                  <th className="py-2.5 px-4 text-amber-300 font-bold text-sm">{s.species.turkishName || s.species.canonicalName}</th>
+                  <th className="py-2.5 pl-4 text-right uppercase text-[11px]">Kıyaslama / Analiz</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-emerald-950/40">
+                {/* 1. Türkçe İsim */}
                 <tr>
-                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">Toplam GBIF Kaydı</td>
-                  <td className="py-2.5 px-4 font-bold text-white tabular-nums">{p.totalRecords}</td>
-                  <td className="py-2.5 px-4 font-bold text-white tabular-nums">{s.totalRecords}</td>
-                  <td className="py-2.5 pl-4 text-right text-emerald-300">
+                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">1. Türkçe İsim</td>
+                  <td className="py-2.5 px-4 font-bold text-white">{p.species.turkishName}</td>
+                  <td className="py-2.5 px-4 font-bold text-white">{s.species.turkishName}</td>
+                  <td className="py-2.5 pl-4 text-right text-emerald-400/70">Yerel adlandırma</td>
+                </tr>
+
+                {/* 2. Bilimsel İsim */}
+                <tr>
+                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">2. Bilimsel İsim (Taksonomi)</td>
+                  <td className="py-2.5 px-4 italic font-serif text-emerald-300">{p.species.scientificName}</td>
+                  <td className="py-2.5 px-4 italic font-serif text-amber-300">{s.species.scientificName}</td>
+                  <td className="py-2.5 pl-4 text-right text-emerald-400/70">Binominal nomenklatür</td>
+                </tr>
+
+                {/* 3. Familya ve Sınıf */}
+                <tr>
+                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">3. Familya ve Sınıf</td>
+                  <td className="py-2.5 px-4 text-white">
+                    <span className="block font-semibold">{p.species.family || 'Bilinmiyor'}</span>
+                    <span className="text-[10px] text-emerald-400/70 block">{p.species.class || p.species.classHierarchy || '—'} / {p.species.order || '—'}</span>
+                  </td>
+                  <td className="py-2.5 px-4 text-white">
+                    <span className="block font-semibold">{s.species.family || 'Bilinmiyor'}</span>
+                    <span className="text-[10px] text-amber-400/70 block">{s.species.class || s.species.classHierarchy || '—'} / {s.species.order || '—'}</span>
+                  </td>
+                  <td className="py-2.5 pl-4 text-right text-emerald-400/70">
+                    {p.species.family === s.species.family ? 'Aynı Familya' : 'Farklı Familya'}
+                  </td>
+                </tr>
+
+                {/* 4. Toplam GBIF Gözlem Sayısı */}
+                <tr>
+                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">4. Toplam GBIF Kaydı (Arşiv)</td>
+                  <td className="py-2.5 px-4 font-bold text-white tabular-nums">{p.totalRecords.toLocaleString('tr-TR')} adet</td>
+                  <td className="py-2.5 px-4 font-bold text-white tabular-nums">{s.totalRecords.toLocaleString('tr-TR')} adet</td>
+                  <td className="py-2.5 pl-4 text-right text-emerald-300 font-bold">
                     {p.totalRecords > 0 && s.totalRecords > 0 
-                      ? `${(Math.max(p.totalRecords, s.totalRecords) / Math.min(p.totalRecords, s.totalRecords)).toFixed(1)}x`
+                      ? `${(Math.max(p.totalRecords, s.totalRecords) / Math.min(p.totalRecords, s.totalRecords)).toFixed(1)} kat fark`
                       : '—'}
                   </td>
                 </tr>
+
+                {/* 5. GPS Koordinatlı Gözlem Sayısı */}
                 <tr>
-                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">GPS Koordinatlı Kayıt</td>
-                  <td className="py-2.5 px-4 font-bold text-emerald-300 tabular-nums">{p.mappedRecordsCount}</td>
-                  <td className="py-2.5 px-4 font-bold text-amber-300 tabular-nums">{s.mappedRecordsCount}</td>
+                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">5. GPS Koordinatlı Kayıt (Harita)</td>
+                  <td className="py-2.5 px-4 font-bold text-emerald-300 tabular-nums">
+                    {p.mappedRecordsCount.toLocaleString('tr-TR')} nokta
+                    <span className="block text-[10px] font-normal text-emerald-400/70">
+                      (%{p.downloadedRecordsCount > 0 ? Math.round((p.mappedRecordsCount / p.downloadedRecordsCount) * 100) : 0} başarı)
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-4 font-bold text-amber-300 tabular-nums">
+                    {s.mappedRecordsCount.toLocaleString('tr-TR')} nokta
+                    <span className="block text-[10px] font-normal text-amber-400/70">
+                      (%{s.downloadedRecordsCount > 0 ? Math.round((s.mappedRecordsCount / s.downloadedRecordsCount) * 100) : 0} başarı)
+                    </span>
+                  </td>
                   <td className="py-2.5 pl-4 text-right text-emerald-300">
-                    Haritada her ikisi de işaretlendi
+                    Haritada coğrafi koordinatlı
                   </td>
                 </tr>
+
+                {/* 6. En Fazla Gözlem Yapılan Bölgeler */}
                 <tr>
-                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">Kayıt Bulunan İl Sayısı</td>
-                  <td className="py-2.5 px-4 font-bold text-white tabular-nums">{p.regionalStats.length} İl</td>
-                  <td className="py-2.5 px-4 font-bold text-white tabular-nums">{s.regionalStats.length} İl</td>
+                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">6. En Çok Gözlenen Bölgeler / İller</td>
+                  <td className="py-2.5 px-4 text-white">
+                    <span className="font-bold text-emerald-300">{p.regionalStats[0]?.region || '—'}</span>
+                    <span className="text-[10px] text-emerald-400/70 block">
+                      {p.regionalStats.slice(0, 3).map(r => `${r.region} (${r.count})`).join(', ') || 'Veri yok'}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-4 text-white">
+                    <span className="font-bold text-amber-300">{s.regionalStats[0]?.region || '—'}</span>
+                    <span className="text-[10px] text-amber-400/70 block">
+                      {s.regionalStats.slice(0, 3).map(r => `${r.region} (${r.count})`).join(', ') || 'Veri yok'}
+                    </span>
+                  </td>
                   <td className="py-2.5 pl-4 text-right text-emerald-300">
-                    {p.regionalStats.length > s.regionalStats.length ? `${p.species.turkishName} daha yaygın` : `${s.species.turkishName} daha yaygın`}
+                    {p.regionalStats.length} İl vs {s.regionalStats.length} İl yayılış
                   </td>
                 </tr>
+
+                {/* 7. Yıllara Göre Değişim / Zirve Yıl */}
                 <tr>
-                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">En Çok Gözlenen İl</td>
-                  <td className="py-2.5 px-4 text-emerald-300 font-bold">{p.regionalStats[0]?.region || '—'} ({p.regionalStats[0]?.count || 0})</td>
-                  <td className="py-2.5 px-4 text-amber-300 font-bold">{s.regionalStats[0]?.region || '—'} ({s.regionalStats[0]?.count || 0})</td>
-                  <td className="py-2.5 pl-4 text-right text-emerald-300">Bölgesel odak noktaları</td>
+                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">7. Yıllara Göre Değişim / Zirve Yıl</td>
+                  <td className="py-2.5 px-4 text-white">
+                    <span className="font-bold text-emerald-300">Zirve: {p.peakYear?.year || '—'}</span>
+                    <span className="text-[10px] text-emerald-400/70 block">
+                      ({p.peakYear?.count || 0} kayıt) — İlk: {p.lowestYear?.year || '—'}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-4 text-white">
+                    <span className="font-bold text-amber-300">Zirve: {s.peakYear?.year || '—'}</span>
+                    <span className="text-[10px] text-amber-400/70 block">
+                      ({s.peakYear?.count || 0} kayıt) — İlk: {s.lowestYear?.year || '—'}
+                    </span>
+                  </td>
+                  <td className="py-2.5 pl-4 text-right text-emerald-300">
+                    Kronolojik gözlem yoğunluğu
+                  </td>
+                </tr>
+
+                {/* 8. Koruma Kategorisi (IUCN) */}
+                <tr>
+                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">8. Koruma Durumu (IUCN Red List)</td>
+                  <td className="py-2.5 px-4">
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-900/60 text-emerald-300 border border-emerald-700/50">
+                      {p.species.iucnStatus || 'NE'}
+                    </span>
+                    <span className="block text-[10px] text-emerald-300/80 mt-0.5">
+                      {p.species.iucnCategoryName || 'Değerlendirilmemiş'}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-900/60 text-amber-300 border border-amber-700/50">
+                      {s.species.iucnStatus || 'NE'}
+                    </span>
+                    <span className="block text-[10px] text-amber-300/80 mt-0.5">
+                      {s.species.iucnCategoryName || 'Değerlendirilmemiş'}
+                    </span>
+                  </td>
+                  <td className="py-2.5 pl-4 text-right text-emerald-400/70 text-[10px]">
+                    Resmi IUCN Kırmızı Liste verisi
+                  </td>
+                </tr>
+
+                {/* 9. Veri Kaynakları ve Güvenilirlik */}
+                <tr>
+                  <td className="py-2.5 pr-4 text-emerald-100 font-sans font-medium">9. Veri Kaynakları & Güvenilirlik</td>
+                  <td className="py-2.5 px-4 text-white">
+                    <span className="block text-emerald-300 font-bold">GBIF + iNaturalist</span>
+                    <span className="text-[10px] text-emerald-400/70 block">
+                      Eşleşme: {p.species.matchType || 'EXACT'} (%{p.species.confidence || 95} güven)
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-4 text-white">
+                    <span className="block text-amber-300 font-bold">GBIF + iNaturalist</span>
+                    <span className="text-[10px] text-amber-400/70 block">
+                      Eşleşme: {s.species.matchType || 'EXACT'} (%{s.species.confidence || 95} güven)
+                    </span>
+                  </td>
+                  <td className="py-2.5 pl-4 text-right text-emerald-400/70 text-[10px]">
+                    Hakemli & açık bilimsel veriler
+                  </td>
                 </tr>
               </tbody>
             </table>

@@ -7,15 +7,28 @@ interface SpeciesOverviewProps {
 }
 
 export const SpeciesOverview: React.FC<SpeciesOverviewProps> = ({ analysis }) => {
-  const { species, totalRecords, mappedRecordsCount, unmappedRecordsCount, dateRange, countryName } = analysis;
+  const { 
+    species, 
+    totalRecords, 
+    downloadedRecordsCount, 
+    mappedRecordsCount, 
+    unmappedRecordsCount, 
+    dateRange, 
+    countryName,
+    dataQualityNotice 
+  } = analysis;
 
-  const coordinatePercentage = totalRecords > 0 
-    ? Math.round((mappedRecordsCount / totalRecords) * 100) 
+  const coordinatePercentage = downloadedRecordsCount > 0 
+    ? Math.round((mappedRecordsCount / downloadedRecordsCount) * 100) 
     : 0;
 
   // IUCN Renk Belirleme
   const getIucnBadge = (status?: string) => {
     switch (status?.toUpperCase()) {
+      case 'EX':
+        return { bg: 'bg-zinc-950/80 border-zinc-600/50 text-zinc-300', dot: 'bg-zinc-500', name: 'Nesli Tükenmiş (EX)' };
+      case 'EW':
+        return { bg: 'bg-purple-950/80 border-purple-600/50 text-purple-300', dot: 'bg-purple-500', name: 'Doğada Tükenmiş (EW)' };
       case 'CR':
         return { bg: 'bg-rose-950/80 border-rose-600/50 text-rose-300', dot: 'bg-rose-500', name: 'Kritik Düzeyde Tehlikede (CR)' };
       case 'EN':

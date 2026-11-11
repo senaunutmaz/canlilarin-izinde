@@ -172,25 +172,28 @@ app.post('/api/agent/research', async (req: Request, res: Response): Promise<voi
 
     // İki tür karşılaştırma isteği kontrolü
     const compCheck = extractComparisonSpecies(userQuery);
-    if (compCheck.isComparison && compCheck.speciesB && compCheck.speciesB !== params.scientificName) {
-      try {
-        addStep(
-          'Karşılaştırmalı Tür Analizi Başlatıldı',
-          `2. Tür: ${compCheck.speciesB} için GBIF kayıtları getiriliyor...`,
-          'in_progress'
-        );
-        secondaryAnalysis = await fetchSpeciesAnalysis(compCheck.speciesB, {
-          countryCode: params.countryCode,
-          startYear: params.startYear,
-          endYear: params.endYear,
-          fetchExtraPages: true,
-        });
-        addStep(
-          '2. Tür Verileri Hazırlandı',
-          `${secondaryAnalysis.species.turkishName || compCheck.speciesB}: ${secondaryAnalysis.totalRecords} kayıt, ${secondaryAnalysis.mappedRecordsCount} GPS koordinatı.`
-        );
-      } catch (secErr) {
-        console.warn('İkinci tür çekilemedi:', secErr);
+    if (compCheck.isComparison && (compCheck.speciesA || compCheck.speciesB)) {
+      const otherSpecies = compCheck.speciesA === params.scientificName ? compCheck.speciesB : compCheck.speciesA;
+      if (otherSpecies && otherSpecies !== params.scientificName) {
+        try {
+          addStep(
+            'Karşılaştırmalı Tür Analizi Başlatıldı',
+            `2. Tür: ${otherSpecies} için GBIF kayıtları getiriliyor...`,
+            'in_progress'
+          );
+          secondaryAnalysis = await fetchSpeciesAnalysis(otherSpecies, {
+            countryCode: params.countryCode,
+            startYear: params.startYear,
+            endYear: params.endYear,
+            fetchExtraPages: true,
+          });
+          addStep(
+            '2. Tür Verileri Hazırlandı',
+            `${secondaryAnalysis.species.turkishName || otherSpecies}: ${secondaryAnalysis.totalRecords} kayıt, ${secondaryAnalysis.mappedRecordsCount} GPS koordinatı.`
+          );
+        } catch (secErr) {
+          console.warn('İkinci tür çekilemedi:', secErr);
+        }
       }
     }
   } catch (gbifErr: any) {
@@ -502,6 +505,37 @@ GBIF veri tabanındaki yıllık gözlem dalgalanmaları doğrudan canlı popüla
   });
 });
 
+// Direct Species Query Endpoint
+app.get('/api/species/:name', async (req: Request, res: Response): Promise<void> => {
+  const { name } = req.params;
+  const country = (req.query.country as string) || 'TR';
+  const startYear = req.query.startYear ? parseInt(req.query.startYear as string, 10) : undefined;
+  const endYear = req.query.endYear ? parseInt(req.query.endYear as string, 10) : undefined;
+
+  try {
+    const analysis = await fetchSpeciesAnalysis(name, {
+      countryCode: country === 'GLOBAL' ? '' : country,
+      startYear,
+      endYear,
+      fetchExtraPages: true,
+    });
+    res.json(analysis);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Tür verileri alınamadı.' });
+  }
+});
+
+// Direct Species Taxonomy Match Endpoint
+app.get('/api/species/match/:name', async (req: Request, res: Response): Promise<void> => {
+  const { name } = req.params;
+  try {
+    const matched = await matchSpecies(name);
+    res.json(matched);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Tür eşleştirilemedi.' });
+  }
+});
+
 // Direct Side-by-Side Species Comparison Endpoint
 app.post('/api/species/compare', async (req: Request, res: Response): Promise<void> => {
   const { speciesA, speciesB, country = 'TR' } = req.body;
@@ -511,8 +545,8 @@ app.post('/api/species/compare', async (req: Request, res: Response): Promise<vo
   }
   try {
     const [analysisA, analysisB] = await Promise.all([
-      fetchSpeciesAnalysis(speciesA, { countryCode: country }),
-      fetchSpeciesAnalysis(speciesB, { countryCode: country }),
+      fetchSpeciesAnalysis(speciesA, { countryCode: country === 'GLOBAL' ? '' : country }),
+      fetchSpeciesAnalysis(speciesB, { countryCode: country === 'GLOBAL' ? '' : country }),
     ]);
     res.json({
       success: true,

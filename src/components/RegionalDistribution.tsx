@@ -34,23 +34,26 @@ export const RegionalDistribution: React.FC<RegionalDistributionProps> = ({
     <div className="bg-[#111e17] border border-emerald-900/60 rounded-2xl p-6 lg:p-8 shadow-xl flex flex-col justify-between">
       <div>
         {/* Section Header */}
-        <div className="flex items-center justify-between gap-4 mb-6 pb-4 border-b border-emerald-900/40">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-emerald-900/40">
           <div>
             <h3 className="text-xl font-bold text-white flex items-center gap-2">
               <MapPin className="w-5 h-5 text-emerald-400" />
               <span>Bölgelere Göre Dağılım</span>
             </h3>
             <p className="text-xs text-emerald-300/70 mt-1">
-              Türün gözlemlendiği iller ve bölgesel yoğunluk analizi
+              Türün gözlemlendiği iller ve GBIF arşiv fasetleri üzerinden hesaplanan bölgesel yoğunluk analizi
             </p>
           </div>
 
-          <div className="text-right">
+          <div className="text-left sm:text-right">
             <span className="text-xs font-mono text-emerald-400/80 uppercase block">
               Tespit Edilen İl
             </span>
             <span className="text-lg font-bold font-mono text-white tabular-nums">
               {regionalStats.length} İl
+            </span>
+            <span className="text-[10px] text-emerald-300/60 font-mono block">
+              ({totalRecords.toLocaleString('tr-TR')} arşiv kaydı)
             </span>
           </div>
         </div>

@@ -12,16 +12,22 @@ export interface SpeciesInfo {
   kingdom?: string;
   phylum?: string;
   class?: string;
+  classHierarchy?: string;
   order?: string;
   family?: string;
   genus?: string;
   rank?: string;
   taxonomicStatus?: string;
+  matchType?: string;
+  confidence?: number;
+  synonymOf?: string;
+  isMatched?: boolean;
   photoUrl?: string;
   photoAttribution?: string;
-  iucnStatus?: 'CR' | 'EN' | 'VU' | 'NT' | 'LC' | 'DD' | 'NE' | string;
+  iucnStatus?: 'EX' | 'EW' | 'CR' | 'EN' | 'VU' | 'NT' | 'LC' | 'DD' | 'NE' | string;
   iucnCategoryName?: string;
   iucnSource?: string;
+  iucnEvaluationDate?: string;
   iucnVerified?: boolean;
   summary?: string;
   inaturalistUrl?: string;
@@ -66,10 +72,11 @@ export interface SpeciesAnalysis {
   species: SpeciesInfo;
   countryCode: string;
   countryName: string;
-  totalRecords: number;
-  mappedRecordsCount: number;
-  unmappedRecordsCount: number;
-  unlocatedCount: number;
+  totalRecords: number; // GBIF veritabanındaki toplam kayıt sayısı (Archive Count)
+  downloadedRecordsCount: number; // İndirilen ve harita/detayda incelenen kayıt sayısı (Sample Count)
+  mappedRecordsCount: number; // İndirilenler arasında geçerli ve doğrulanmış GPS koordinatlı olanlar
+  unmappedRecordsCount: number; // İndirilenler arasında koordinatı olmayan veya (0,0) geçersiz olanlar
+  unlocatedCount: number; // Arşivde il/bölge adı belirtilmemiş kayıt sayısı
   dateRange: {
     minYear: number | null;
     maxYear: number | null;
@@ -92,6 +99,8 @@ export interface SpeciesAnalysis {
     endYear?: number;
     taxonKey?: number;
   };
+  isArchiveFacetCalculated: boolean;
+  dataQualityNotice?: string;
   queriedAt: string;
 }
 

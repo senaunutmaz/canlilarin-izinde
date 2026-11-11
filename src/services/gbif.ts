@@ -134,7 +134,7 @@ export const SPECIES_RECOGNITION_RULES: SpeciesRule[] = [
     turkishName: 'Bozayı',
     family: 'Ursidae',
     patterns: [
-      /\b(boz\s*ay[ıi]|ursus\s+arctos)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+      /(?:^|[^\p{L}\p{N}])(boz\s*ay[ıi]|ursus\s+arctos)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?(?=[^\p{L}\p{N}]|$)/iu,
     ],
   },
   // 2. Vaşak (Lynx lynx) - "vaşak", "vaşaklar", "vaşakların", "vaşağın"
@@ -143,8 +143,8 @@ export const SPECIES_RECOGNITION_RULES: SpeciesRule[] = [
     turkishName: 'Bayağı Vaşak',
     family: 'Felidae',
     patterns: [
-      /\b(baya[gğ]ı\s+va[sş]ak|lynx\s+lynx)\b/iu,
-      /\bva[sş]a[kğ](?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+      /(?:^|[^\p{L}\p{N}])(baya[gğ]ı\s+va[sş]ak|lynx\s+lynx)(?=[^\p{L}\p{N}]|$)/iu,
+      /(?:^|[^\p{L}\p{N}])va[sş]a[kğ](?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?(?=[^\p{L}\p{N}]|$)/iu,
     ],
   },
   // 3. Bozkurt / Kurt (Canis lupus) - "bozkurt", "kurt", "kurtların", "kurdun"
@@ -153,8 +153,8 @@ export const SPECIES_RECOGNITION_RULES: SpeciesRule[] = [
     turkishName: 'Bozkurt',
     family: 'Canidae',
     patterns: [
-      /\b(bozkurt|canis\s+lupus)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
-      /\b(kurt|kurd)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+      /(?:^|[^\p{L}\p{N}])(bozkurt|canis\s+lupus)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?(?=[^\p{L}\p{N}]|$)/iu,
+      /(?:^|[^\p{L}\p{N}])(kurt|kurd)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?(?=[^\p{L}\p{N}]|$)/iu,
     ],
   },
   // 4. Caretta caretta - "caretta caretta", "carettaların", "deniz kaplumbağası"
@@ -163,8 +163,8 @@ export const SPECIES_RECOGNITION_RULES: SpeciesRule[] = [
     turkishName: 'İribaş Deniz Kaplumbağası',
     family: 'Cheloniidae',
     patterns: [
-      /\b(caretta(?:\s+caretta)?)\b/iu,
-      /\bdeniz\s+kaplumba[gğ]as[ıi](?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+      /(?:^|[^\p{L}\p{N}])(caretta(?:\s+caretta)?)(?=[^\p{L}\p{N}]|$)/iu,
+      /(?:^|[^\p{L}\p{N}])deniz\s+kaplumba[gğ]as[ıi](?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?(?=[^\p{L}\p{N}]|$)/iu,
     ],
   },
   // 5. Akdeniz Foku (Monachus monachus) - "akdeniz foku", "akdeniz foklarının"
@@ -173,8 +173,8 @@ export const SPECIES_RECOGNITION_RULES: SpeciesRule[] = [
     turkishName: 'Akdeniz Foku',
     family: 'Phocidae',
     patterns: [
-      /\b(akdeniz\s+foku|monachus\s+monachus|deniz\s+foku)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
-      /\bfok(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+      /(?:^|[^\p{L}\p{N}])(akdeniz\s+foku|monachus\s+monachus|deniz\s+foku)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?(?=[^\p{L}\p{N}]|$)/iu,
+      /(?:^|[^\p{L}\p{N}])fok(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?(?=[^\p{L}\p{N}]|$)/iu,
     ],
   },
   // 6. Toros Kurbağası (Rana holtzi)
@@ -183,7 +183,7 @@ export const SPECIES_RECOGNITION_RULES: SpeciesRule[] = [
     turkishName: 'Toros Kurbağası',
     family: 'Ranidae',
     patterns: [
-      /\b(toros\s+kurba[gğ]as[ıi]|rana\s+holtzi)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+      /(?:^|[^\p{L}\p{N}])(toros\s+kurba[gğ]as[ıi]|rana\s+holtzi)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?(?=[^\p{L}\p{N}]|$)/iu,
     ],
   },
   // 7. Kelaynak (Geronticus eremita)
@@ -192,7 +192,7 @@ export const SPECIES_RECOGNITION_RULES: SpeciesRule[] = [
     turkishName: 'Kelaynak',
     family: 'Threskiornithidae',
     patterns: [
-      /\b(kelayna[kğ]|geronticus\s+eremita)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?\b/iu,
+      /(?:^|[^\p{L}\p{N}])(kelayna[kğ]|geronticus\s+eremita)(?:lar|ler)?(?:[ıiuü]|n[ıiuü]|[ıiuü]n|n[ıiuü]n|[ae]|y[ae]|[dt][ae]|[dt][ae]n)?(?=[^\p{L}\p{N}]|$)/iu,
     ],
   },
   // 8. Çizgili Sırtlan (Hyaena hyaena)
@@ -790,11 +790,51 @@ export async function matchSpecies(query: string): Promise<SpeciesInfo> {
   }
 
   try {
-    const gbifRes = await fetchWithRetry(`https://api.gbif.org/v1/species/match?name=${encodeURIComponent(targetScientific)}`);
+    const gbifRes = await fetchWithRetry(`https://api.gbif.org/v1/species/match?name=${encodeURIComponent(targetScientific)}&verbose=true`);
     const gbifData = await gbifRes.json();
 
-    const scientificName = gbifData.scientificName || gbifData.canonicalName || targetScientific;
-    const canonicalName = gbifData.canonicalName || scientificName.split('(')[0].trim();
+    let resolvedData = gbifData;
+    let isMatched = gbifData.matchType !== 'NONE';
+
+    // Eğer doğrudan matchType NONE ise veya güven skoru çok düşükse, GBIF Species Search ile alternatif ara
+    if (!isMatched || (gbifData.confidence && gbifData.confidence < 50)) {
+      try {
+        const searchRes = await fetchWithRetry(`https://api.gbif.org/v1/species/search?q=${encodeURIComponent(targetScientific)}&limit=3`);
+        const searchData = await searchRes.json();
+        if (searchData.results && searchData.results.length > 0) {
+          const bestCandidate = searchData.results.find((r: any) => r.taxonomicStatus === 'ACCEPTED') || searchData.results[0];
+          if (bestCandidate) {
+            resolvedData = {
+              usageKey: bestCandidate.key,
+              scientificName: bestCandidate.scientificName,
+              canonicalName: bestCandidate.canonicalName,
+              kingdom: bestCandidate.kingdom,
+              phylum: bestCandidate.phylum,
+              class: bestCandidate.class,
+              order: bestCandidate.order,
+              family: bestCandidate.family,
+              genus: bestCandidate.genus,
+              rank: bestCandidate.rank,
+              status: bestCandidate.taxonomicStatus,
+              confidence: 75,
+              matchType: 'SEARCH_API',
+            };
+            isMatched = true;
+          }
+        }
+      } catch (searchErr) {
+        console.warn('GBIF species search fallback failed:', searchErr);
+      }
+    }
+
+    const scientificName = resolvedData.scientificName || resolvedData.canonicalName || targetScientific;
+    const canonicalName = resolvedData.canonicalName || scientificName.split('(')[0].trim();
+
+    // Eşanlamlı (Synonym) kontrolü
+    let synonymOf: string | undefined;
+    if (resolvedData.status === 'SYNONYM' && resolvedData.accepted) {
+      synonymOf = resolvedData.accepted;
+    }
 
     // iNaturalist üzerinden fotoğraf ve Türkçe isim desteği
     const inatInfo = await fetchInatTaxon(canonicalName || scientificName);
@@ -805,7 +845,7 @@ export async function matchSpecies(query: string): Promise<SpeciesInfo> {
     if (inatInfo?.iucnStatus) {
       finalIucn = inatInfo.iucnStatus;
       finalIucnCategory = inatInfo.iucnCategoryName || getIucnLabel(finalIucn);
-      iucnSource = 'iNaturalist Taksonomi & IUCN Koruma Ağı';
+      iucnSource = 'iNaturalist & IUCN Kırmızı Liste Ortak Veri Ağı';
       iucnVerified = true;
     } else if (predefinedIucn) {
       finalIucn = predefinedIucn;
@@ -819,19 +859,23 @@ export async function matchSpecies(query: string): Promise<SpeciesInfo> {
     }
 
     const result: SpeciesInfo = {
-      usageKey: gbifData.usageKey,
+      usageKey: resolvedData.usageKey,
       scientificName: scientificName,
       canonicalName: canonicalName,
       turkishName: predefinedTurkishName || inatInfo?.turkishName || canonicalName,
       englishName: inatInfo?.englishName,
-      kingdom: gbifData.kingdom || inatInfo?.kingdom || 'Animalia',
-      phylum: gbifData.phylum || inatInfo?.phylum || 'Chordata',
-      class: gbifData.class || inatInfo?.class,
-      order: gbifData.order || inatInfo?.order,
-      family: gbifData.family || inatInfo?.family,
-      genus: gbifData.genus || inatInfo?.genus,
-      rank: gbifData.rank || 'SPECIES',
-      taxonomicStatus: gbifData.status || 'ACCEPTED',
+      kingdom: resolvedData.kingdom || inatInfo?.kingdom || 'Animalia',
+      phylum: resolvedData.phylum || inatInfo?.phylum || 'Chordata',
+      class: resolvedData.class || inatInfo?.class,
+      order: resolvedData.order || inatInfo?.order,
+      family: resolvedData.family || inatInfo?.family,
+      genus: resolvedData.genus || inatInfo?.genus,
+      rank: resolvedData.rank || 'SPECIES',
+      taxonomicStatus: resolvedData.status || 'ACCEPTED',
+      matchType: resolvedData.matchType,
+      confidence: resolvedData.confidence,
+      synonymOf,
+      isMatched,
       photoUrl: inatInfo?.photoUrl,
       photoAttribution: inatInfo?.photoAttribution,
       iucnStatus: finalIucn,
@@ -840,7 +884,7 @@ export async function matchSpecies(query: string): Promise<SpeciesInfo> {
       iucnVerified,
       summary: inatInfo?.summary,
       inaturalistUrl: inatInfo?.inatUrl,
-      gbifUrl: gbifData.usageKey ? `https://www.gbif.org/species/${gbifData.usageKey}` : `https://www.gbif.org/species/search?q=${encodeURIComponent(canonicalName)}`
+      gbifUrl: resolvedData.usageKey ? `https://www.gbif.org/species/${resolvedData.usageKey}` : `https://www.gbif.org/species/search?q=${encodeURIComponent(canonicalName)}`
     };
 
     setCached(cacheKey, result);
@@ -854,6 +898,7 @@ export async function matchSpecies(query: string): Promise<SpeciesInfo> {
       turkishName: predefinedTurkishName || targetScientific,
       kingdom: 'Animalia',
       rank: 'SPECIES',
+      isMatched: false,
       iucnStatus: fallbackIucn,
       iucnCategoryName: getIucnLabel(fallbackIucn),
       iucnSource: predefinedIucn ? 'Canlı Atlası Referans Envanteri' : 'Değerlendirilmemiş (Ağ Hatası / Çevrimdışı)',
@@ -969,7 +1014,8 @@ export async function fetchSpeciesAnalysis(
     ? `taxonKey=${species.usageKey}` 
     : `scientificName=${encodeURIComponent(searchName)}`;
 
-  const gbifUrl = `https://api.gbif.org/v1/occurrence/search?${taxonParam}${countryParam}${yearParam}&limit=${limit}&facet=year&facet=stateProvince&facetLimit=100`;
+  // Tüm 81 ili ve tüm yılları eksiksiz kapsamak için facetLimit artırıldı
+  const gbifUrl = `https://api.gbif.org/v1/occurrence/search?${taxonParam}${countryParam}${yearParam}&limit=${limit}&facet=year&facet=stateProvince&facetLimit=200`;
 
   let totalRecords = 0;
   let yearlyStats: YearlyStat[] = [];
@@ -983,8 +1029,7 @@ export async function fetchSpeciesAnalysis(
 
     totalRecords = typeof data.count === 'number' ? data.count : 0;
 
-    // Ölçeklenebilir Sayfalama (Pagination): 600 kayıt sınırlaması kaldırıldı;
-    // Eğer toplam kayıt limitten fazlaysa, ek sayfaları eş zamanlı (concurrent) olarak çek
+    // Ölçeklenebilir Sayfalama: Örneklem için concurrent istekler yap
     if (totalRecords > limit && fetchExtraPages) {
       try {
         const maxRecordsToFetch = Math.min(1200, totalRecords);
@@ -1013,7 +1058,7 @@ export async function fetchSpeciesAnalysis(
       }
     }
 
-    // Yıl verilerini ayrıştır (GBIF facets)
+    // Yıl verilerini ayrıştır (GBIF arşivinin %100 facet verisinden)
     const yearFacet = data.facets?.find((f: { field: string }) => f.field === 'YEAR');
     if (yearFacet && Array.isArray(yearFacet.counts) && yearFacet.counts.length > 0) {
       yearlyStats = yearFacet.counts
@@ -1025,7 +1070,7 @@ export async function fetchSpeciesAnalysis(
         .sort((a: YearlyStat, b: YearlyStat) => a.year - b.year);
     }
 
-    // İl / Bölge verilerini ayrıştır (GBIF facets)
+    // İl / Bölge verilerini ayrıştır (GBIF arşivinin %100 facet verisinden)
     const stateFacet = data.facets?.find((f: { field: string }) => f.field === 'STATE_PROVINCE');
     let facetRegionTotal = 0;
 
@@ -1033,7 +1078,7 @@ export async function fetchSpeciesAnalysis(
       const validRegionMap = new Map<string, number>();
 
       stateFacet.counts.forEach((c: { name: string; count: number }) => {
-        const cleanName = cleanProvinceName(c.name);
+        const cleanName = cleanProvinceName(c.name, countryCode);
         if (cleanName) {
           validRegionMap.set(cleanName, (validRegionMap.get(cleanName) || 0) + c.count);
           facetRegionTotal += c.count;
@@ -1062,7 +1107,7 @@ export async function fetchSpeciesAnalysis(
         eventDate: typeof r.eventDate === 'string' ? r.eventDate : undefined,
         country: typeof r.country === 'string' ? r.country : (countryCode === 'TR' ? 'Türkiye' : undefined),
         countryCode: typeof r.countryCode === 'string' ? r.countryCode : countryCode,
-        stateProvince: typeof r.stateProvince === 'string' ? cleanProvinceName(r.stateProvince) : undefined,
+        stateProvince: typeof r.stateProvince === 'string' ? cleanProvinceName(r.stateProvince, countryCode) : undefined,
         locality: typeof r.locality === 'string' ? r.locality : undefined,
         basisOfRecord: typeof r.basisOfRecord === 'string' ? translateBasisOfRecord(r.basisOfRecord) : 'Gözlem Kaydı',
         institutionCode: typeof r.institutionCode === 'string' ? r.institutionCode : undefined,
@@ -1108,18 +1153,24 @@ export async function fetchSpeciesAnalysis(
 
   } catch (err) {
     console.error('GBIF occurrences fetch failed:', err);
+    throw err;
   }
 
-  // Koordinatı DOĞRULANMIŞ olan kayıtlar (harita ve mekansal analiz için)
-  const mappedRecords = occurrences.filter(
-    o => typeof o.decimalLatitude === 'number' &&
-         typeof o.decimalLongitude === 'number' &&
-         !isNaN(o.decimalLatitude) &&
-         !isNaN(o.decimalLongitude) &&
-         o.decimalLatitude >= -90 && o.decimalLatitude <= 90 &&
-         o.decimalLongitude >= -180 && o.decimalLongitude <= 180 &&
-         !(o.decimalLatitude === 0 && o.decimalLongitude === 0)
-  );
+  // Koordinatı DOĞRULANMIŞ olan kayıtlar (Türkiye aramasında Türkiye poligonu içinde olanlar)
+  const mappedRecords = occurrences.filter(o => {
+    if (typeof o.decimalLatitude !== 'number' || typeof o.decimalLongitude !== 'number') return false;
+    if (isNaN(o.decimalLatitude) || isNaN(o.decimalLongitude)) return false;
+    if (o.decimalLatitude === 0 && o.decimalLongitude === 0) return false;
+    if (countryCode === 'TR') {
+      return isWithinTurkeyBounds(o.decimalLatitude, o.decimalLongitude);
+    }
+    return o.decimalLatitude >= -90 && o.decimalLatitude <= 90 &&
+           o.decimalLongitude >= -180 && o.decimalLongitude <= 180;
+  });
+
+  const downloadedRecordsCount = occurrences.length;
+  const mappedRecordsCount = mappedRecords.length;
+  const unmappedRecordsCount = Math.max(0, downloadedRecordsCount - mappedRecordsCount);
 
   // Yıl aralığı
   const years = yearlyStats.map(y => y.year);
@@ -1141,8 +1192,9 @@ export async function fetchSpeciesAnalysis(
     countryCode,
     countryName: countryCode === 'TR' ? 'Türkiye' : 'Tüm Dünya',
     totalRecords,
-    mappedRecordsCount: mappedRecords.length,
-    unmappedRecordsCount: Math.max(0, totalRecords - mappedRecords.length),
+    downloadedRecordsCount,
+    mappedRecordsCount,
+    unmappedRecordsCount,
     unlocatedCount,
     dateRange: {
       minYear,
@@ -1160,6 +1212,10 @@ export async function fetchSpeciesAnalysis(
       endYear,
       taxonKey: species.usageKey,
     },
+    isArchiveFacetCalculated: true,
+    dataQualityNotice: totalRecords > downloadedRecordsCount 
+      ? `GBIF arşivinde ${totalRecords.toLocaleString('tr-TR')} toplam kayıt bulunmaktadır. İl ve yıl dağılımı tüm arşiv facet verisinden (%100) hesaplanmış, harita için ${downloadedRecordsCount.toLocaleString('tr-TR')} kayıtlık doğrulanmış örneklem indirilmiştir.`
+      : undefined,
     queriedAt: new Date().toISOString()
   };
 
@@ -1167,18 +1223,87 @@ export async function fetchSpeciesAnalysis(
   return analysisResult;
 }
 
+export const TURKEY_PROVINCES: Record<string, string> = {
+  'adana': 'Adana', 'adiyaman': 'Adıyaman', 'adıyaman': 'Adıyaman', 'afyon': 'Afyonkarahisar', 'afyonkarahisar': 'Afyonkarahisar',
+  'agri': 'Ağrı', 'ağrı': 'Ağrı', 'aksaray': 'Aksaray', 'amasya': 'Amasya', 'ankara': 'Ankara', 'antalya': 'Antalya',
+  'ardahan': 'Ardahan', 'artvin': 'Artvin', 'aydin': 'Aydın', 'aydın': 'Aydın', 'balikesir': 'Balıkesir', 'balıkesir': 'Balıkesir',
+  'bartin': 'Bartın', 'bartın': 'Bartın', 'batman': 'Batman', 'bayburt': 'Bayburt', 'bilecik': 'Bilecik', 'bingol': 'Bingöl',
+  'bingöl': 'Bingöl', 'bitlis': 'Bitlis', 'bolu': 'Bolu', 'burdur': 'Burdur', 'bursa': 'Bursa', 'canakkale': 'Çanakkale',
+  'çanakkale': 'Çanakkale', 'cankiri': 'Çankırı', 'çankırı': 'Çankırı', 'corum': 'Çorum', 'çorum': 'Çorum', 'denizli': 'Denizli',
+  'diyarbakir': 'Diyarbakır', 'diyarbakır': 'Diyarbakır', 'duzce': 'Düzce', 'düzce': 'Düzce', 'edirne': 'Edirne',
+  'elazig': 'Elazığ', 'elazığ': 'Elazığ', 'erzincan': 'Erzincan', 'erzurum': 'Erzurum', 'eskisehir': 'Eskişehir',
+  'eskişehir': 'Eskişehir', 'gaziantep': 'Gaziantep', 'giresun': 'Giresun', 'gumushane': 'Gümüşhane', 'gümüşhane': 'Gümüşhane',
+  'hakkari': 'Hakkâri', 'hakkâri': 'Hakkâri', 'hatay': 'Hatay', 'igdir': 'Iğdır', 'ığdır': 'Iğdır', 'isparta': 'Isparta',
+  'ısparta': 'Isparta', 'istanbul': 'İstanbul', 'i̇stanbul': 'İstanbul', 'izmir': 'İzmir', 'i̇zmir': 'İzmir',
+  'kahramanmaras': 'Kahramanmaraş', 'kahramanmaraş': 'Kahramanmaraş', 'maraş': 'Kahramanmaraş', 'karabuk': 'Karabük', 'karabük': 'Karabük',
+  'karaman': 'Karaman', 'kars': 'Kars', 'kastamonu': 'Kastamonu', 'kayseri': 'Kayseri', 'kilis': 'Kilis',
+  'kirikkale': 'Kırıkkale', 'kırıkkale': 'Kırıkkale', 'kirklareli': 'Kırklareli', 'kırklareli': 'Kırklareli',
+  'kirsehir': 'Kırşehir', 'kırşehir': 'Kırşehir', 'kocaeli': 'Kocaeli', 'izmit': 'Kocaeli', 'konya': 'Konya', 'kutahya': 'Kütahya',
+  'kütahya': 'Kütahya', 'malatya': 'Malatya', 'manisa': 'Manisa', 'mardin': 'Mardin', 'mersin': 'Mersin',
+  'içel': 'Mersin', 'icel': 'Mersin', 'mugla': 'Muğla', 'muğla': 'Muğla', 'mus': 'Muş', 'muş': 'Muş', 'nevsehir': 'Nevşehir',
+  'nevşehir': 'Nevşehir', 'nigde': 'Niğde', 'niğde': 'Niğde', 'ordu': 'Ordu', 'osmaniye': 'Osmaniye', 'rize': 'Rize',
+  'sakarya': 'Sakarya', 'adapazarı': 'Sakarya', 'samsun': 'Samsun', 'sanliurfa': 'Şanlıurfa', 'şanlıurfa': 'Şanlıurfa', 'urfa': 'Şanlıurfa',
+  'siirt': 'Siirt', 'sinop': 'Sinop', 'sivas': 'Sivas', 'sirnak': 'Şırnak', 'şırnak': 'Şırnak', 'tekirdag': 'Tekirdağ',
+  'tekirdağ': 'Tekirdağ', 'tokat': 'Tokat', 'trabzon': 'Trabzon', 'tunceli': 'Tunceli', 'usak': 'Uşak', 'uşak': 'Uşak',
+  'van': 'Van', 'yalova': 'Yalova', 'yozgat': 'Yozgat', 'zonguldak': 'Zonguldak'
+};
+
+const TURKEY_ISO_CODES: Record<string, string> = {
+  'TR-01': 'Adana', 'TR-02': 'Adıyaman', 'TR-03': 'Afyonkarahisar', 'TR-04': 'Ağrı', 'TR-05': 'Amasya',
+  'TR-06': 'Ankara', 'TR-07': 'Antalya', 'TR-08': 'Artvin', 'TR-09': 'Aydın', 'TR-10': 'Balıkesir',
+  'TR-11': 'Bilecik', 'TR-12': 'Bingöl', 'TR-13': 'Bitlis', 'TR-14': 'Bolu', 'TR-15': 'Burdur',
+  'TR-16': 'Bursa', 'TR-17': 'Çanakkale', 'TR-18': 'Çankırı', 'TR-19': 'Çorum', 'TR-20': 'Denizli',
+  'TR-21': 'Diyarbakır', 'TR-22': 'Edirne', 'TR-23': 'Elazığ', 'TR-24': 'Erzincan', 'TR-25': 'Erzurum',
+  'TR-26': 'Eskişehir', 'TR-27': 'Gaziantep', 'TR-28': 'Giresun', 'TR-29': 'Gümüşhane', 'TR-30': 'Hakkâri',
+  'TR-31': 'Hatay', 'TR-32': 'Isparta', 'TR-33': 'Mersin', 'TR-34': 'İstanbul', 'TR-35': 'İzmir',
+  'TR-36': 'Kars', 'TR-37': 'Kastamonu', 'TR-38': 'Kayseri', 'TR-39': 'Kırklareli', 'TR-40': 'Kırşehir',
+  'TR-41': 'Kocaeli', 'TR-42': 'Konya', 'TR-43': 'Kütahya', 'TR-44': 'Malatya', 'TR-45': 'Manisa',
+  'TR-46': 'Kahramanmaraş', 'TR-47': 'Mardin', 'TR-48': 'Muğla', 'TR-49': 'Muş', 'TR-50': 'Nevşehir',
+  'TR-51': 'Niğde', 'TR-52': 'Ordu', 'TR-53': 'Rize', 'TR-54': 'Sakarya', 'TR-55': 'Samsun',
+  'TR-56': 'Siirt', 'TR-57': 'Sinop', 'TR-58': 'Sivas', 'TR-59': 'Tekirdağ', 'TR-60': 'Tokat',
+  'TR-61': 'Trabzon', 'TR-62': 'Tunceli', 'TR-63': 'Şanlıurfa', 'TR-64': 'Uşak', 'TR-65': 'Van',
+  'TR-66': 'Yozgat', 'TR-67': 'Zonguldak', 'TR-68': 'Aksaray', 'TR-69': 'Bayburt', 'TR-70': 'Karaman',
+  'TR-71': 'Kırıkkale', 'TR-72': 'Batman', 'TR-73': 'Şırnak', 'TR-74': 'Bartın', 'TR-75': 'Ardahan',
+  'TR-76': 'Iğdır', 'TR-77': 'Yalova', 'TR-78': 'Karabük', 'TR-79': 'Kilis', 'TR-80': 'Osmaniye',
+  'TR-81': 'Düzce'
+};
+
 /**
- * İl adlarındaki olası fazlalıkları temizleme ve doğrula
+ * Türkiye coğrafi sınırları içinde koordinat doğrulama (-90..90, -180..180 ve TR poligonu)
  */
-export function cleanProvinceName(raw?: string): string {
+export function isWithinTurkeyBounds(lat?: number, lon?: number): boolean {
+  if (lat === undefined || lon === undefined || isNaN(lat) || isNaN(lon)) return false;
+  return lat >= 35.8 && lat <= 42.2 && lon >= 25.6 && lon <= 44.8 && !(lat === 0 && lon === 0);
+}
+
+/**
+ * İl adlarındaki olası fazlalıkları temizleme, ISO kodlarını ve Türkçe adları konsolide etme
+ */
+export function cleanProvinceName(raw?: string, countryCode = 'TR'): string {
   if (!raw || typeof raw !== 'string') return '';
-  let name = raw.replace(/\b(Province|İli|Ili|Vilayeti|Valiliği|State|Region|District)\b/gi, '').trim();
-  
-  // Rakam, çok kısa veya anlamsız stringleri filtrele
+  const trimmed = raw.trim();
+
+  if (countryCode === 'TR') {
+    const upperCode = trimmed.toUpperCase();
+    if (TURKEY_ISO_CODES[upperCode]) {
+      return TURKEY_ISO_CODES[upperCode];
+    }
+
+    const cleaned = trimmed
+      .replace(/\b(Province|İli|Ili|Vilayeti|Valiliği|State|Region|District|Municipality|Merkez)\b/gi, '')
+      .replace(/[0-9]/g, '')
+      .trim()
+      .toLowerCase();
+
+    if (TURKEY_PROVINCES[cleaned]) {
+      return TURKEY_PROVINCES[cleaned];
+    }
+  }
+
+  const name = trimmed.replace(/\b(Province|İli|Ili|Vilayeti|Valiliği|State|Region|District)\b/gi, '').trim();
   if (/^\d+$/.test(name) || name.length < 2 || /^(null|undefined|tr|turkey|türkiye|none|unknown)$/i.test(name)) {
     return '';
   }
-  
   return name.charAt(0).toLocaleUpperCase('tr-TR') + name.slice(1);
 }
 

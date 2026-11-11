@@ -14,6 +14,7 @@ import { SpeciesDiscovery } from './components/SpeciesDiscovery';
 import { SpeciesComparison } from './components/SpeciesComparison';
 import { RecordDetailTable } from './components/RecordDetailTable';
 import { ConservationGuide } from './components/ConservationGuide';
+import { ResearchAgent } from './components/ResearchAgent';
 import { Footer } from './components/Footer';
 import { fetchSpeciesAnalysis } from './services/gbif';
 import { SpeciesAnalysis } from './types/biodiversity';
@@ -141,6 +142,12 @@ export default function App() {
         {/* Loaded Analysis View */}
         {!isLoading && primaryAnalysis && (
           <>
+            {/* AI Biodiversity Research Agent */}
+            <ResearchAgent
+              onLoadSpeciesToAtlas={(sciName, country) => executeSearch(sciName, country || activeCountry)}
+              activeSpeciesName={primaryAnalysis.species.scientificName}
+            />
+
             {/* 1. Species Overview Card & Key KPIs */}
             <SpeciesOverview analysis={primaryAnalysis} />
 

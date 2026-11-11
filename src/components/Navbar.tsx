@@ -28,7 +28,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onQuickSearch, isCompareMode, on
         </a>
 
         {/* Zone 2: Navigation Links */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-emerald-100/70">
+        <nav className="hidden lg:flex items-center gap-5 text-sm font-medium text-emerald-100/70">
+          <a href="#ajan" className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>AI Araştırma Ajanı</span>
+          </a>
           <a href="#arama" className="hover:text-white transition-colors whitespace-nowrap shrink-0">
             Tür Araştır
           </a>
@@ -36,7 +40,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onQuickSearch, isCompareMode, on
             Keşif Alanı
           </a>
           <a href="#analiz" className="hover:text-white transition-colors whitespace-nowrap shrink-0">
-            Yıllık & Bölgesel Analiz
+            Analiz
           </a>
           <a href="#harita" className="hover:text-white transition-colors whitespace-nowrap shrink-0">
             Gözlem Haritası
@@ -46,8 +50,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onQuickSearch, isCompareMode, on
           </a>
         </nav>
 
-        {/* Zone 3: 1 primary action */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Zone 3: Actions */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          <a
+            href="#ajan"
+            className="hidden sm:flex px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition-all items-center gap-1.5 whitespace-nowrap"
+          >
+            <span>Ajan ile Araştır</span>
+          </a>
+
           <button
             onClick={onToggleCompare}
             className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
